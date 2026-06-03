@@ -69,6 +69,18 @@ cd D:\codex\dji-s1\RoboMaster-S1-YOLO11-llama-demo
 ..\.venv\Scripts\python.exe .\s1_yolo_llm_agent.py
 ```
 
+运行 Web 调试页面：
+
+```powershell
+..\.venv\Scripts\python.exe .\s1_web_debug.py
+```
+
+然后在浏览器打开：
+
+```text
+http://127.0.0.1:5000
+```
+
 如果缺少依赖，请安装到上一级 `.venv`：
 
 ```powershell
@@ -192,6 +204,29 @@ forward
 backward
 ```
 
+## 测试 5：Web 调试页面
+
+```powershell
+..\.venv\Scripts\python.exe .\s1_web_debug.py
+```
+
+打开：
+
+```text
+http://127.0.0.1:5000
+```
+
+页面功能：
+
+- 启动和释放 RoboMaster S1 连接；
+- 网页中预览摄像头视频；
+- 视频画面叠加 YOLO 检测框；
+- 显示最近检测到的类别、置信度、中心点和面积占比；
+- 提供云台上、下、左、右、停止、回中按钮；
+- 只控制云台，不控制底盘，不使用发射器。
+
+Web 服务使用 Python 标准库实现，不需要额外安装 Flask。
+
 ## 常见问题
 
 ### 1. `ModuleNotFoundError: No module named 'requests'`
@@ -261,6 +296,7 @@ python test_llm_api.py
 python test_s1_camera_yolo.py
 python s1_yolo_gimbal_follow.py
 python s1_yolo_llm_agent.py
+..\.venv\Scripts\python.exe .\s1_web_debug.py
 ```
 
 ## 安全注意事项
@@ -281,5 +317,8 @@ RoboMaster-S1-YOLO11-llama-demo/
 ├── test_llm_api.py
 ├── test_s1_camera_yolo.py
 ├── s1_yolo_gimbal_follow.py
-└── s1_yolo_llm_agent.py
+├── s1_yolo_llm_agent.py
+├── s1_web_debug.py
+└── templates/
+    └── index.html
 ```

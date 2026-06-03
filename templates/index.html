@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RoboMaster S1 Web Debug</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #0d141b;
+      color: #e8eef4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0d141b; }
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #253241;
+      background: #121d27;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    h1 { font-size: 20px; margin: 0; font-weight: 650; }
+    main {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: minmax(480px, 2fr) minmax(320px, 1fr);
+      gap: 18px;
+    }
+    section {
+      border: 1px solid #263544;
+      background: #101a24;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    section h2 {
+      margin: 0;
+      padding: 12px 14px;
+      font-size: 15px;
+      font-weight: 650;
+      border-bottom: 1px solid #263544;
+      background: #142131;
+    }
+    .video-wrap {
+      aspect-ratio: 16 / 9;
+      background: #05080c;
+      display: grid;
+      place-items: center;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .panel-body { padding: 14px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      border: 1px solid #395169;
+      background: #1b2d3f;
+      color: #f3f8fc;
+      border-radius: 6px;
+      min-width: 78px;
+      min-height: 38px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:hover { background: #25445f; }
+    button:active { transform: translateY(1px); }
+    button.danger { border-color: #744044; background: #3a2024; }
+    button.primary { border-color: #3c6c8d; background: #1d4c6c; }
+    .gimbal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 78px);
+      grid-template-rows: repeat(3, 42px);
+      gap: 8px;
+      justify-content: center;
+      margin-top: 14px;
+    }
+    .gimbal-grid button { min-width: 0; width: 78px; height: 42px; padding: 0; }
+    .up { grid-column: 2; grid-row: 1; }
+    .left { grid-column: 1; grid-row: 2; }
+    .stop { grid-column: 2; grid-row: 2; }
+    .right { grid-column: 3; grid-row: 2; }
+    .down { grid-column: 2; grid-row: 3; }
+    .recenter { grid-column: 1 / 4; grid-row: 4; width: 250px !important; }
+    pre, .status-line {
+      background: #091018;
+      border: 1px solid #223140;
+      border-radius: 6px;
+      padding: 10px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 80px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      border-bottom: 1px solid #243442;
+      padding: 8px 6px;
+      text-align: left;
+    }
+    th { color: #a9bdce; font-weight: 600; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; padding: 12px; }
+      header { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RoboMaster S1 Web Debug</h1>
+    <div class="toolbar">
+      <button class="primary" onclick="startRobot()">启动</button>
+      <button class="danger" onclick="stopRobot()">停止并释放</button>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>视频预览 / YOLO 检测</h2>
+      <div class="video-wrap">
+        <img id="video" alt="video preview">
+      </div>
+    </section>
+
+    <div>
+      <section>
+        <h2>云台控制</h2>
+        <div class="panel-body">
+          <div class="gimbal-grid">
+            <button class="up" onmousedown="gimbal('up')" onmouseup="gimbal('stop')" onclick="gimbal('up')">上</button>
+            <button class="left" onmousedown="gimbal('left')" onmouseup="gimbal('stop')" onclick="gimbal('left')">左</button>
+            <button class="stop danger" onclick="gimbal('stop')">停</button>
+            <button class="right" onmousedown="gimbal('right')" onmouseup="gimbal('stop')" onclick="gimbal('right')">右</button>
+            <button class="down" onmousedown="gimbal('down')" onmouseup="gimbal('stop')" onclick="gimbal('down')">下</button>
+            <button class="recenter" onclick="gimbal('recenter')">云台回中</button>
+          </div>
+        </div>
+      </section>
+
+      <section style="margin-top:18px;">
+        <h2>状态</h2>
+        <div class="panel-body">
+          <div id="status" class="status-line">等待启动</div>
+        </div>
+      </section>
+
+      <section style="margin-top:18px;">
+        <h2>识别结果</h2>
+        <div class="panel-body">
+          <table>
+            <thead>
+              <tr>
+                <th>类别</th>
+                <th>置信度</th>
+                <th>中心点</th>
+                <th>面积占比</th>
+              </tr>
+            </thead>
+            <tbody id="detections"></tbody>
+          </table>
+          <pre id="raw"></pre>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const video = document.getElementById("video");
+    const statusBox = document.getElementById("status");
+    const detectionsBody = document.getElementById("detections");
+    const rawBox = document.getElementById("raw");
+
+    async function postJson(url, body = {}) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || res.statusText);
+      }
+      return data;
+    }
+
+    async function startRobot() {
+      try {
+        await postJson("/api/start");
+        video.src = "/video_feed?t=" + Date.now();
+        await refreshStatus();
+      } catch (err) {
+        statusBox.textContent = "启动失败: " + err.message;
+      }
+    }
+
+    async function stopRobot() {
+      try {
+        await postJson("/api/stop");
+        video.removeAttribute("src");
+        await refreshStatus();
+      } catch (err) {
+        statusBox.textContent = "停止失败: " + err.message;
+      }
+    }
+
+    async function gimbal(direction) {
+      try {
+        await postJson("/api/gimbal", {direction});
+        await refreshStatus();
+      } catch (err) {
+        statusBox.textContent = "云台控制失败: " + err.message;
+      }
+    }
+
+    function renderDetections(items) {
+      detectionsBody.innerHTML = "";
+      for (const item of items) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${item.class_name}</td>
+          <td>${item.confidence}</td>
+          <td>${item.center}</td>
+          <td>${item.area_ratio}</td>
+        `;
+        detectionsBody.appendChild(tr);
+      }
+      rawBox.textContent = JSON.stringify(items, null, 2);
+    }
+
+    async function refreshStatus() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        const s = data.status || {};
+        statusBox.textContent =
+          `robot=${s.robot_connected} video=${s.video_running} yolo=${s.yolo_loaded}\n` +
+          `last_action=${s.last_action}\n` +
+          `last_error=${s.last_error || ""}`;
+        renderDetections(data.detections || []);
+      } catch (err) {
+        statusBox.textContent = "状态刷新失败: " + err.message;
+      }
+    }
+
+    setInterval(refreshStatus, 1000);
+    refreshStatus();
+  </script>
+</body>
+</html>
