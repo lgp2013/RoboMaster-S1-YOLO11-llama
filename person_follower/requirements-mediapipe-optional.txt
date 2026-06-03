@@ -1,0 +1,6 @@
+# 可选手势识别依赖。
+# x86_64 Ubuntu 20.04 + Python3.8 推荐：
+mediapipe==0.8.11
+
+# 如果你确实需要新版 MediaPipe，且确认 jaxlib wheel 可用，再手动尝试：
+# mediapipe==0.10.11

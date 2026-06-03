@@ -67,11 +67,16 @@ class PersonFollowerNode(Node):
 
         self.gesture_detector = None
         if self.gesture_enabled:
-            self.gesture_detector = GestureDetector(
-                max_num_hands=int(self.get_parameter("gesture.max_num_hands").value),
-                min_detection_confidence=float(self.get_parameter("gesture.min_detection_confidence").value),
-                min_tracking_confidence=float(self.get_parameter("gesture.min_tracking_confidence").value),
-            )
+            try:
+                self.gesture_detector = GestureDetector(
+                    max_num_hands=int(self.get_parameter("gesture.max_num_hands").value),
+                    min_detection_confidence=float(self.get_parameter("gesture.min_detection_confidence").value),
+                    min_tracking_confidence=float(self.get_parameter("gesture.min_tracking_confidence").value),
+                )
+            except Exception as exc:
+                self.gesture_enabled = False
+                self.gesture_detector = None
+                self.get_logger().warning("MediaPipe gesture disabled: %s" % exc)
         self.gesture_debouncer = GestureDebouncer(
             stable_frame_count=int(self.get_parameter("gesture.stable_frame_count").value),
             cooldown_seconds=float(self.get_parameter("gesture.cooldown_seconds").value),
@@ -568,6 +573,7 @@ class PersonFollowerNode(Node):
             "target": target_info,
             "target_distance_m": self.target_distance_m,
             "gesture": gesture_info,
+            "gesture_enabled": self.gesture_enabled,
             "gesture_logs": list(self.gesture_controller.logs),
             "scene": self.latest_scene,
             "agent": {
