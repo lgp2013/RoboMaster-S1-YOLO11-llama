@@ -3,6 +3,4 @@ opencv-python
 numpy<2
 flask>=2.2,<3.0
 pyyaml
-# Ubuntu 20.04 + Python3.8 更适合 0.8.11；0.10.x 会拉取 jax/jaxlib，很多源或 ARM 环境没有匹配 wheel。
-mediapipe==0.8.11; platform_machine == "x86_64"
 requests

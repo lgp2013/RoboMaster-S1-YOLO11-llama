@@ -1,6 +1,10 @@
 # 可选手势识别依赖。
-# x86_64 Ubuntu 20.04 + Python3.8 推荐：
-mediapipe==0.8.11
+#
+# 注意：
+# - 主程序不再强制安装 mediapipe，避免依赖 jax/jaxlib 导致整个 ROS 节点无法启动。
+# - 如果你的 Python 源能提供匹配 wheel，可以手动安装下面版本。
+# - 安装失败不会影响 YOLO、Dashboard、Agent、/cmd_vel 控制功能。
+mediapipe==0.10.10
 
 # 如果你确实需要新版 MediaPipe，且确认 jaxlib wheel 可用，再手动尝试：
 # mediapipe==0.10.11
