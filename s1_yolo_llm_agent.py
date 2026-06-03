@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime
 from typing import Dict, Optional, Tuple
 
 import cv2
@@ -20,6 +21,7 @@ from config import (
     ALLOW_TURN_IN_PLACE,
     AUTO_MOVE_ENABLED,
     EMERGENCY_STOP,
+    ENABLE_DASHBOARD,
     FORWARD_COOLDOWN,
     LLM_BASE_URL,
     LLM_INTERVAL_SECONDS,
@@ -38,6 +40,7 @@ from config import (
     YOLO_IMGSZ,
     YOLO_MODEL,
 )
+from dashboard import DashboardRenderer
 
 SYSTEM_PROMPT = """
 你是 RoboMaster S1 机器人控制助手。
@@ -161,6 +164,9 @@ class SafetyGuard:
     def stop_forward_tracking(self) -> None:
         self.is_forwarding = False
         self.forward_start_time = 0.0
+
+    def is_forward_cooldown_active(self) -> bool:
+        return time.time() - self.last_forward_time < FORWARD_COOLDOWN
 
     def filter_action(self, raw_action: str, scene_info: Dict[str, object]) -> Tuple[str, str]:
         """Return (safe_action, reason) for a raw LLM action suggestion."""
@@ -291,7 +297,7 @@ def extract_json(text: str) -> Dict[str, str]:
     return {"action": action, "reason": reason}
 
 
-def ask_llm(scene_text: str) -> Dict[str, str]:
+def ask_llm(scene_text: str) -> Dict[str, object]:
     url = f"{LLM_BASE_URL}/v1/chat/completions"
     payload = {
         "model": LLM_MODEL,
@@ -309,9 +315,19 @@ def ask_llm(scene_text: str) -> Dict[str, str]:
         data = response.json()
         text = data["choices"][0]["message"]["content"]
     except Exception as exc:
-        return {"action": "stop", "reason": f"LLM request failed: {exc}"}
+        return {
+            "action": "stop",
+            "reason": f"LLM request failed: {exc}",
+            "last_llm_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "llm_error": str(exc),
+            "usage": None,
+        }
 
-    return extract_json(text)
+    decision = extract_json(text)
+    decision["last_llm_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    decision["llm_error"] = "none"
+    decision["usage"] = data.get("usage")
+    return decision
 
 
 def execute_action(ep_robot: robot.Robot, action: str) -> None:
@@ -353,15 +369,14 @@ def execute_action(ep_robot: robot.Robot, action: str) -> None:
         gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
 
 
-def draw_overlay(
-    frame,
-    person_box: Optional[Box],
-    scene: Dict[str, object],
-    decision: Dict[str, str],
-) -> None:
+def draw_detection_overlay(frame, person_box: Optional[Box]) -> None:
+    """Draw only essential YOLO target visuals on the video frame."""
     if person_box is not None:
         x1, y1, x2, y2, confidence = person_box
         cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+        center_x = int((x1 + x2) / 2)
+        center_y = int((y1 + y2) / 2)
+        cv2.circle(frame, (center_x, center_y), 5, (0, 255, 255), -1)
         cv2.putText(
             frame,
             f"person {confidence:.2f}",
@@ -372,21 +387,38 @@ def draw_overlay(
             2,
         )
 
-    raw_action = decision.get("raw_action", decision.get("action", "stop"))
-    safe_action = decision.get("safe_action", decision.get("action", "stop"))
-    action_text = f"raw: {raw_action}  safe: {safe_action}"
-    reason_text = f"safety: {decision.get('safety_reason', decision.get('reason', ''))[:90]}"
-    cv2.putText(frame, action_text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 220, 255), 2)
-    cv2.putText(frame, reason_text, (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 255), 2)
+def build_detection_info(scene: Dict[str, object], fps: float) -> Dict[str, object]:
+    has_person = bool(scene.get("has_person"))
+    return {
+        "has_person": has_person,
+        "target": "person" if has_person else "none",
+        "confidence": float(scene.get("confidence", 0.0) or 0.0),
+        "horizontal_position": scene.get("horizontal", "unknown") if has_person else "unknown",
+        "vertical_position": scene.get("vertical", "unknown") if has_person else "unknown",
+        "distance": scene.get("distance", "unknown") if has_person else "unknown",
+        "area_ratio": float(scene.get("area_ratio", 0.0) or 0.0),
+        "fps": fps,
+    }
 
-    if scene.get("has_person"):
-        scene_text = (
-            f"{scene['horizontal']} / {scene['vertical']} / "
-            f"{scene['distance']} / area={float(scene['area_ratio']):.3f}"
-        )
-    else:
-        scene_text = "no person"
-    cv2.putText(frame, scene_text, (12, 84), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 2)
+
+def build_safety_info(safety_guard: SafetyGuard, safe_action: str, safety_reason: str) -> Dict[str, object]:
+    return {
+        "safe_action": safe_action,
+        "safety_reason": safety_reason,
+        "auto_move_enabled": AUTO_MOVE_ENABLED,
+        "forward_cooldown_active": safety_guard.is_forward_cooldown_active(),
+        "allow_turn_in_place": ALLOW_TURN_IN_PLACE,
+    }
+
+
+def build_robot_status(connection: str, camera_state: str, control_mode: str) -> Dict[str, object]:
+    return {
+        "connection": connection,
+        "conn_type": ROBOT_CONN_TYPE,
+        "camera": camera_state,
+        "control_mode": control_mode,
+        "emergency_stop": EMERGENCY_STOP,
+    }
 
 
 def main() -> int:
@@ -394,33 +426,60 @@ def main() -> int:
     camera = None
     last_llm_time = 0.0
     safety_guard = SafetyGuard()
-    decision = {
-        "raw_action": "stop",
-        "safe_action": "stop",
+    dashboard = DashboardRenderer()
+    dashboard.add_log("Program started")
+    llm_decision: Dict[str, object] = {
+        "action": "stop",
         "reason": "starting",
-        "safety_reason": "starting",
+        "last_llm_time": "N/A",
+        "llm_error": "none",
+        "usage": None,
     }
+    safe_action = "stop"
+    safety_reason = "starting"
+    previous_safe_action = "stop"
+    frame_count = 0
+    last_fps_time = time.time()
+    current_fps = 0.0
+    connection_state = "disconnected"
+    camera_state = "stopped"
+    control_mode = "AI Assist"
 
     try:
         print(f"Loading YOLO model: {YOLO_MODEL}")
         model = YOLO(YOLO_MODEL)
+        dashboard.add_log("YOLO model loaded")
 
         print(f"Connecting RoboMaster S1: conn_type={ROBOT_CONN_TYPE}")
         ep_robot.initialize(conn_type=ROBOT_CONN_TYPE)
+        connection_state = "connected"
+        dashboard.add_log("S1 connected")
         camera = ep_robot.camera
 
         print("Starting video stream and recentering gimbal...")
         camera.start_video_stream(display=False)
+        camera_state = "running"
+        dashboard.add_log("Camera started")
         ep_robot.gimbal.recenter().wait_for_completed()
         execute_action(ep_robot, "stop")
 
-        print("Press q to quit.")
+        window_name = "RoboMaster S1 AI Control Dashboard"
+        print("Press q to quit. Press s for safe stop.")
         while True:
             frame = camera.read_cv2_image(strategy="newest", timeout=5)
             if frame is None:
                 print("[WARN] No camera frame received.")
+                dashboard.add_log("No camera frame received")
                 execute_action(ep_robot, "stop")
                 continue
+
+            frame_count += 1
+            now_for_fps = time.time()
+            elapsed_for_fps = now_for_fps - last_fps_time
+            if elapsed_for_fps >= 1.0:
+                current_fps = frame_count / elapsed_for_fps
+                frame_count = 0
+                last_fps_time = now_for_fps
 
             height, width = frame.shape[:2]
             results = model.predict(
@@ -431,38 +490,70 @@ def main() -> int:
             )
             person_box = select_best_person(results)
             scene = classify_scene(person_box, width, height)
+            detection_info = build_detection_info(scene, current_fps)
 
             now = time.time()
             if now - last_llm_time >= LLM_INTERVAL_SECONDS:
                 scene_text, scene_info = build_scene_text(scene)
                 current_decision = ask_llm(scene_text)
                 raw_action = current_decision.get("action", "stop")
-                safe_action, safety_reason = safety_guard.filter_action(raw_action, scene_info)
+                safe_action, safety_reason = safety_guard.filter_action(str(raw_action), scene_info)
                 execute_action(ep_robot, safe_action)
-                decision = {
-                    "raw_action": raw_action,
-                    "safe_action": safe_action,
-                    "reason": current_decision.get("reason", ""),
-                    "safety_reason": safety_reason,
-                }
+                llm_decision = current_decision
+                if current_decision.get("llm_error") == "none":
+                    dashboard.add_log(f"LLM ok raw_action={raw_action}")
+                else:
+                    dashboard.add_log(f"LLM failed: {current_decision.get('llm_error')}")
+                if raw_action == "forward" and safe_action == "stop":
+                    dashboard.add_log(f"SafetyGuard intercepted forward: {safety_reason}")
+                if safe_action != previous_safe_action:
+                    dashboard.add_log(f"action changed: {previous_safe_action} -> {safe_action}")
+                    previous_safe_action = safe_action
                 last_llm_time = now
 
-            draw_overlay(frame, person_box, scene, decision)
-            cv2.imshow("S1 YOLO11 LLM Agent", frame)
+            annotated = frame.copy()
+            draw_detection_overlay(annotated, person_box)
+            safety_info = build_safety_info(safety_guard, safe_action, safety_reason)
+            robot_status = build_robot_status(connection_state, camera_state, control_mode)
+            dashboard_img = dashboard.render(
+                frame=annotated,
+                detection_info=detection_info,
+                llm_decision=llm_decision,
+                safety_info=safety_info,
+                robot_status=robot_status,
+            )
+            cv2.imshow(window_name if ENABLE_DASHBOARD else "S1 YOLO11 LLM Agent", dashboard_img)
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("s"):
+                execute_action(ep_robot, "stop")
+                safety_guard.stop_forward_tracking()
+                safe_action = "stop"
+                safety_reason = "Emergency safe stop triggered by user"
+                llm_decision = {
+                    **llm_decision,
+                    "action": llm_decision.get("action", "stop"),
+                    "reason": llm_decision.get("reason", ""),
+                }
+                control_mode = "Safe Stop"
+                dashboard.add_log("Emergency safe stop triggered by user")
+            elif key == ord("q"):
+                dashboard.add_log("User pressed q, exiting")
                 break
 
         return 0
     except KeyboardInterrupt:
+        dashboard.add_log("Interrupted by user")
         print("Interrupted by user.")
         return 0
     except Exception as exc:
+        dashboard.add_log(f"Program exception: {exc}")
         print(f"[FAIL] LLM agent failed: {exc}")
         return 1
     finally:
         try:
             execute_action(ep_robot, "stop")
+            dashboard.add_log("finally stop executed")
         except Exception as exc:
             print(f"[WARN] robot stop failed: {exc}")
         if camera is not None:

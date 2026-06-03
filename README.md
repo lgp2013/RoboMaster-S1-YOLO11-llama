@@ -230,7 +230,27 @@ forward
 backward
 ```
 
-## 测试 5：Web 调试页面
+## 测试 5：Dashboard 控制台
+
+```powershell
+python s1_yolo_llm_agent.py
+```
+
+`s1_yolo_llm_agent.py` 会打开窗口 `RoboMaster S1 AI Control Dashboard`。Dashboard 用于把摄像头、YOLO、LLM 建议和安全过滤结果放在同一个窗口里观察。界面按四区组织：
+
+- 视频区：显示 S1 摄像头画面、YOLO 检测框、目标中心点和关键状态叠加。
+- 感知区：显示当前检测到的 `person`、置信度、目标框面积占比和结构化 `scene_text`。
+- 决策区：显示 LLM 返回的 `raw_action`、`SafetyGuard` 过滤后的 `safe_action`、`safety_reason` 和最近一次请求状态。
+- 运行区：显示连接状态、自动移动开关、最近动作、错误信息和运行日志，方便排查机器人为什么停下或不动。
+
+键盘快捷键：
+
+- 按 `q`：安全退出 Dashboard，停止底盘和云台，并释放摄像头与机器人连接。
+- 按 `s`：立即发送 `stop`，用于临时急停或在调试时打断当前动作；窗口保持运行，方便继续观察状态。
+
+Dashboard 仍遵守 `config.py` 中的安全配置。默认 `AUTO_MOVE_ENABLED = False`，因此 LLM 即使返回 `forward` 或 `backward`，也会被 `SafetyGuard` 过滤为 `stop`。需要自动前进时必须显式改为 `AUTO_MOVE_ENABLED=True`，并先架空底盘或在开阔区域低速测试。
+
+## 测试 6：Web 调试页面
 
 ```powershell
 ..\.venv\Scripts\python.exe .\s1_web_debug.py
@@ -336,6 +356,7 @@ Invoke-RestMethod -Uri "http://10.10.10.156:8080/v1/models" -Method Get
 
 - 没检测到 person；
 - LLM 返回 `stop`；
+- `AUTO_MOVE_ENABLED = False`，`forward` / `backward` 被 Safety Guard 过滤成 `stop`；
 - SDK 连接失败；
 - 安全速度设置很低；
 - 云台或底盘模块没有初始化成功。
@@ -350,11 +371,31 @@ python s1_yolo_llm_agent.py
 ..\.venv\Scripts\python.exe .\s1_web_debug.py
 ```
 
+### 7. Dashboard 里 LLM 显示 `forward`，但机器人没有前进
+
+这是默认安全行为。完整 Agent 和 Dashboard 默认禁用自动底盘前后移动：
+
+```python
+AUTO_MOVE_ENABLED = False
+```
+
+此时 `SafetyGuard` 会把 `forward` 和 `backward` 过滤成 `stop`，Dashboard 的决策区会显示原始建议、最终安全动作和过滤原因。只有在明确确认测试区域安全后，才建议把它改成 `True`。
+
+### 8. Dashboard 按键没有反应
+
+先确认 Dashboard 窗口是当前焦点窗口。常用按键：
+
+- `q`：安全退出。
+- `s`：立即停止当前动作，但不关闭窗口。
+
+如果按 `q` 后窗口关闭较慢，通常是程序正在释放视频流、SDK 连接或等待最后一次 stop 命令返回。
+
 ## 安全注意事项
 
 - 第一次运行时架空底盘，或放在开阔区域。
 - 保持低速；当前云台控制会进一步降低 50%，自动跟随仍按低速安全策略执行。
 - 随时按 `q` 退出。
+- Dashboard 中可随时按 `s` 发送 stop。
 - 异常退出时程序会尽量执行 stop。
 - 不要加入发射器、射击、水弹、红外攻击等功能。
 - Web 人物跟随第一次测试时，先让 S1 离人 1-2 米，并确保前后没有障碍物。
@@ -370,6 +411,7 @@ RoboMaster-S1-YOLO11-llama-demo/
 ├── test_s1_camera_yolo.py
 ├── s1_yolo_gimbal_follow.py
 ├── s1_yolo_llm_agent.py
+├── dashboard.py
 ├── s1_web_debug.py
 ├── media_locked_people/       # 运行时保存锁定人物截图，默认不提交 Git
 └── templates/

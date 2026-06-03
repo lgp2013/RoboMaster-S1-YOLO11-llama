@@ -46,3 +46,14 @@ MAX_PERSON_AREA_RATIO_FOR_FORWARD = 0.12  # Max person area ratio to allow forwa
 MIN_PERSON_AREA_RATIO_FOR_FORWARD = 0.02  # Min person area ratio to allow forward
 ALLOW_TURN_IN_PLACE = True  # Allow in-place turning when no forward movement
 EMERGENCY_STOP = False  # Emergency stop flag
+
+# OpenCV dashboard layout.
+DASHBOARD_WIDTH = 1280
+DASHBOARD_HEIGHT = 720
+VIDEO_PANEL_WIDTH = 820
+VIDEO_PANEL_HEIGHT = 480
+STATUS_PANEL_WIDTH = 400
+STATUS_PANEL_HEIGHT = 480
+LOG_PANEL_HEIGHT = 130
+MAX_LOG_LINES = 6
+ENABLE_DASHBOARD = True
