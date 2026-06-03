@@ -1,0 +1,5 @@
+robomaster
+ultralytics
+opencv-python
+requests
+numpy

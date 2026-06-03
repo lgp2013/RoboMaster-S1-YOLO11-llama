@@ -1,0 +1,28 @@
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+*.log
+*.tmp
+
+# Local model weights and large media files.
+*.pt
+*.onnx
+*.engine
+*.gguf
+*.wav
+*.mp4
+*.avi
+
+# IDE/editor metadata.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

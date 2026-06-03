@@ -1,0 +1,20 @@
+"""Central configuration for the RoboMaster S1 YOLO11 llama.cpp demo."""
+
+ROBOT_CONN_TYPE = "sta"
+
+LLM_BASE_URL = "http://10.10.10.156:8080"
+LLM_MODEL = "Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf"
+
+YOLO_MODEL = "yolo11n.pt"
+YOLO_CONF = 0.45
+YOLO_IMGSZ = 640
+
+LLM_INTERVAL_SECONDS = 3
+
+SAFE_FORWARD_SPEED = 0.2
+SAFE_BACKWARD_SPEED = -0.2
+SAFE_TURN_SPEED = 20
+SAFE_GIMBAL_YAW_SPEED = 40
+SAFE_GIMBAL_PITCH_SPEED = 25
+
+PERSON_CLASS_ID = 0
