@@ -33,6 +33,12 @@ from ultralytics import YOLO
 
 from config import (
     LOCKED_PERSON_DIR,
+    OBSTACLE_CLASS_IDS,
+    OBSTACLE_MIN_CONF,
+    OBSTACLE_ZONE_X_MAX,
+    OBSTACLE_ZONE_X_MIN,
+    OBSTACLE_ZONE_Y_MAX,
+    OBSTACLE_ZONE_Y_MIN,
     PERSON_CLASS_ID,
     ROBOT_CONN_TYPE,
     SAFE_BACKWARD_SPEED,
@@ -44,7 +50,12 @@ from config import (
     TARGET_CENTER_DEADZONE_Y,
     TARGET_FAR_AREA_RATIO,
     TARGET_FOLLOW_CONTROL_INTERVAL_SECONDS,
+    TARGET_LOST_CHASSIS_SEARCH_SECONDS,
+    TARGET_LOST_GIMBAL_SEARCH_SECONDS,
+    TARGET_MATCH_MIN_SCORE,
     TARGET_NEAR_AREA_RATIO,
+    TARGET_SEARCH_FRONT_WALL_MM,
+    TARGET_SEARCH_TURN_SPEED,
     YOLO_CONF,
     YOLO_IMGSZ,
     YOLO_MODEL,
@@ -59,6 +70,7 @@ ep_robot: Optional[robot.Robot] = None
 camera = None
 gimbal = None
 chassis = None
+sensor = None
 yolo_model: Optional[YOLO] = None
 
 latest_raw_frame = None
@@ -74,10 +86,18 @@ target_state: Dict[str, object] = {
     "crop_path": "",
     "last_match_score": 0.0,
     "last_seen_age_seconds": None,
+    "search_mode": "idle",
+    "search_elapsed_seconds": 0,
+    "locked_image_url": "",
+    "last_tof_mm": None,
 }
 target_histogram = None
 last_target_seen_time = 0.0
 last_control_time = 0.0
+search_started_time = 0.0
+last_search_flip_time = 0.0
+search_yaw_direction = 1
+latest_tof_distance_mm: Optional[List[int]] = None
 
 status = {
     "robot_connected": False,
@@ -108,9 +128,20 @@ def load_yolo() -> None:
         status["yolo_loaded"] = True
 
 
+def tof_callback(distance_info) -> None:
+    global latest_tof_distance_mm
+    try:
+        values = [int(value) for value in distance_info]
+    except Exception:
+        return
+    with state_lock:
+        latest_tof_distance_mm = values
+        target_state["last_tof_mm"] = values
+
+
 def connect_robot() -> None:
     """Connect the robot, start video stream, and recenter the gimbal."""
-    global ep_robot, camera, gimbal, chassis
+    global ep_robot, camera, gimbal, chassis, sensor
 
     if ep_robot is not None:
         return
@@ -121,6 +152,7 @@ def connect_robot() -> None:
     camera = ep_robot.camera
     gimbal = ep_robot.gimbal
     chassis = ep_robot.chassis
+    sensor = getattr(ep_robot, "sensor", None)
 
     print("Starting video stream...")
     camera.start_video_stream(display=False)
@@ -129,6 +161,12 @@ def connect_robot() -> None:
         gimbal.recenter().wait_for_completed(timeout=3)
     except Exception as exc:
         set_error(f"gimbal recenter failed: {exc}")
+
+    if sensor is not None:
+        try:
+            sensor.sub_distance(freq=5, callback=tof_callback)
+        except Exception as exc:
+            set_error(f"tof subscribe failed: {exc}")
 
     with state_lock:
         status["robot_connected"] = True
@@ -160,10 +198,16 @@ def safe_robot_stop() -> None:
 
 def cleanup() -> None:
     """Stop robot resources safely."""
-    global ep_robot, camera, gimbal, chassis, capture_thread
+    global ep_robot, camera, gimbal, chassis, sensor, capture_thread
 
     stop_event.set()
     safe_robot_stop()
+
+    if sensor is not None:
+        try:
+            sensor.unsub_distance()
+        except Exception as exc:
+            print(f"[WARN] sensor.unsub_distance failed: {exc}")
 
     if capture_thread is not None and capture_thread.is_alive():
         capture_thread.join(timeout=1.5)
@@ -190,6 +234,7 @@ def cleanup() -> None:
     camera = None
     gimbal = None
     chassis = None
+    sensor = None
 
 
 def clamp_box(box: List[float], width: int, height: int) -> Tuple[int, int, int, int]:
@@ -297,6 +342,8 @@ def find_locked_target(frame, detections: List[Dict[str, object]]) -> Optional[D
     best_item["is_locked_target"] = True
     with state_lock:
         target_state["last_match_score"] = round(best_score, 3)
+    if best_score < TARGET_MATCH_MIN_SCORE:
+        return None
     return best_item
 
 
@@ -308,6 +355,73 @@ def draw_target_overlay(frame, target: Optional[Dict[str, object]]) -> None:
     cv2.rectangle(frame, (x1, y1), (x2, y2), (80, 220, 120), 3)
     label = f"LOCKED person score={target.get('target_score', 0)}"
     cv2.putText(frame, label, (x1, max(25, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (80, 220, 120), 2)
+
+
+def get_front_distance_mm() -> Optional[int]:
+    with state_lock:
+        distances = list(latest_tof_distance_mm) if latest_tof_distance_mm else []
+    valid = [value for value in distances if value > 0]
+    if not valid:
+        return None
+    return valid[0]
+
+
+def reset_search_state(mode: str = "tracking") -> None:
+    global search_started_time
+    search_started_time = 0.0
+    with state_lock:
+        target_state["search_mode"] = mode
+        target_state["search_elapsed_seconds"] = 0
+
+
+def execute_lost_target_search() -> None:
+    """Search for a locked person after temporary visual loss."""
+    global search_started_time, last_search_flip_time, search_yaw_direction
+
+    now = time.time()
+    if search_started_time <= 0:
+        search_started_time = now
+        last_search_flip_time = now
+        search_yaw_direction = 1
+
+    elapsed = now - search_started_time
+    front_distance = get_front_distance_mm()
+
+    try:
+        if elapsed < TARGET_LOST_GIMBAL_SEARCH_SECONDS:
+            if now - last_search_flip_time > 2.0:
+                search_yaw_direction *= -1
+                last_search_flip_time = now
+            if gimbal is not None:
+                gimbal.drive_speed(pitch_speed=0, yaw_speed=search_yaw_direction * SAFE_GIMBAL_YAW_SPEED)
+            safe_chassis_stop()
+            mode = "gimbal_search"
+            action = f"target_lost_gimbal_search yaw={search_yaw_direction * SAFE_GIMBAL_YAW_SPEED}"
+        elif elapsed < TARGET_LOST_GIMBAL_SEARCH_SECONDS + TARGET_LOST_CHASSIS_SEARCH_SECONDS:
+            safe_gimbal_stop()
+            if front_distance is not None and front_distance < TARGET_SEARCH_FRONT_WALL_MM:
+                if chassis is not None:
+                    chassis.drive_speed(x=SAFE_BACKWARD_SPEED, y=0, z=TARGET_SEARCH_TURN_SPEED)
+                mode = "wall_avoid_turn"
+                action = f"front_wall_avoid distance={front_distance}mm"
+            else:
+                if chassis is not None:
+                    chassis.drive_speed(x=0, y=0, z=TARGET_SEARCH_TURN_SPEED)
+                mode = "chassis_search"
+                action = f"target_lost_chassis_search z={TARGET_SEARCH_TURN_SPEED}"
+        else:
+            safe_robot_stop()
+            mode = "not_found_stop"
+            action = "target_not_found_search_timeout_stop"
+
+        with state_lock:
+            target_state["search_mode"] = mode
+            target_state["search_elapsed_seconds"] = round(elapsed, 1)
+            target_state["last_tof_mm"] = list(latest_tof_distance_mm) if latest_tof_distance_mm else None
+            status["last_action"] = action
+    except Exception as exc:
+        safe_robot_stop()
+        set_error(f"lost target search failed: {exc}")
 
 
 def execute_follow_control(target: Optional[Dict[str, object]], width: int, height: int) -> None:
@@ -323,10 +437,10 @@ def execute_follow_control(target: Optional[Dict[str, object]], width: int, heig
         return
 
     if target is None:
-        safe_robot_stop()
-        with state_lock:
-            status["last_action"] = "target_lost_stop"
+        execute_lost_target_search()
         return
+
+    reset_search_state("tracking")
 
     center_x, center_y = [float(v) for v in target["center"]]
     area_ratio = float(target["area_ratio"])
@@ -462,7 +576,9 @@ def lock_current_person(enable_follow: bool = True) -> Dict[str, object]:
 
     person = find_best_person(detections)
     if person is None:
-        raise RuntimeError("no person detected to lock")
+        raise RuntimeError("no person detected to lock; locked target must be person")
+    if int(person["class_id"]) != PERSON_CLASS_ID:
+        raise RuntimeError("locked target must be person")
 
     crop = crop_detection(frame, person)
     if crop is None or crop.size == 0:
@@ -477,8 +593,10 @@ def lock_current_person(enable_follow: bool = True) -> Dict[str, object]:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     snapshot_path = output_dir / f"locked_person_{timestamp}_frame.jpg"
     crop_path = output_dir / f"locked_person_{timestamp}_crop.jpg"
-    cv2.imwrite(str(snapshot_path), frame)
-    cv2.imwrite(str(crop_path), crop)
+    if not cv2.imwrite(str(snapshot_path), frame):
+        raise RuntimeError("failed to save snapshot frame")
+    if not cv2.imwrite(str(crop_path), crop):
+        raise RuntimeError("failed to save crop image")
 
     with state_lock:
         target_state.update(
@@ -488,8 +606,11 @@ def lock_current_person(enable_follow: bool = True) -> Dict[str, object]:
                 "locked_at": timestamp,
                 "snapshot_path": str(snapshot_path),
                 "crop_path": str(crop_path),
+                "locked_image_url": f"/locked_target_image?t={timestamp}",
                 "last_match_score": 1.0,
                 "last_seen_age_seconds": 0,
+                "search_mode": "tracking" if enable_follow else "locked",
+                "search_elapsed_seconds": 0,
             }
         )
         status["last_action"] = "target_locked_follow_on" if enable_follow else "target_locked"
@@ -500,6 +621,7 @@ def lock_current_person(enable_follow: bool = True) -> Dict[str, object]:
 def unlock_target() -> None:
     global target_histogram, latest_target_detection
     safe_robot_stop()
+    reset_search_state()
     target_histogram = None
     with state_lock:
         latest_target_detection = None
@@ -510,8 +632,11 @@ def unlock_target() -> None:
                 "locked_at": "",
                 "snapshot_path": "",
                 "crop_path": "",
+                "locked_image_url": "",
                 "last_match_score": 0.0,
                 "last_seen_age_seconds": None,
+                "search_mode": "idle",
+                "search_elapsed_seconds": 0,
             }
         )
         status["last_action"] = "target_unlocked_stop"
@@ -546,6 +671,8 @@ class WebDebugHandler(BaseHTTPRequestHandler):
             self.send_json(get_status_payload())
         elif path == "/video_feed":
             self.serve_video_feed()
+        elif path == "/locked_target_image":
+            self.serve_locked_target_image()
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "not found")
 
@@ -599,6 +726,26 @@ class WebDebugHandler(BaseHTTPRequestHandler):
             except (BrokenPipeError, ConnectionResetError):
                 break
 
+    def serve_locked_target_image(self) -> None:
+        with state_lock:
+            crop_path = str(target_state.get("crop_path") or "")
+        if not crop_path:
+            self.send_error(HTTPStatus.NOT_FOUND, "locked target image not found")
+            return
+
+        image_path = Path(crop_path)
+        if not image_path.exists():
+            self.send_error(HTTPStatus.NOT_FOUND, "locked target image not found")
+            return
+
+        body = image_path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def handle_start(self) -> None:
         try:
             ensure_started()
@@ -638,6 +785,7 @@ class WebDebugHandler(BaseHTTPRequestHandler):
             with state_lock:
                 if bool(target_state["auto_follow"]):
                     target_state["auto_follow"] = False
+                    reset_search_state("manual_gimbal")
                 status["last_action"] = f"gimbal_{direction}"
             self.send_json({"ok": True, "direction": direction, **get_status_payload()})
         except Exception as exc:
@@ -672,6 +820,7 @@ class WebDebugHandler(BaseHTTPRequestHandler):
             with state_lock:
                 if bool(target_state["auto_follow"]):
                     target_state["auto_follow"] = False
+                    reset_search_state("manual_chassis")
                 status["last_action"] = f"chassis_{direction}"
             self.send_json({"ok": True, "direction": direction, **get_status_payload()})
         except Exception as exc:
@@ -698,7 +847,10 @@ class WebDebugHandler(BaseHTTPRequestHandler):
                 if enabled and not bool(target_state["locked"]):
                     raise RuntimeError("lock a person before enabling auto follow")
                 target_state["auto_follow"] = enabled
+                target_state["search_mode"] = "tracking" if enabled else "paused"
+                target_state["search_elapsed_seconds"] = 0
                 status["last_action"] = "auto_follow_on" if enabled else "auto_follow_off_stop"
+            reset_search_state("tracking" if enabled else "paused")
             if not enabled:
                 safe_robot_stop()
             self.send_json({"ok": True, **get_status_payload()})

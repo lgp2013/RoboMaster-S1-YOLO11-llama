@@ -133,6 +133,43 @@
     }
     th { color: #a9bdce; font-weight: 600; }
     .hint { color: #9eb4c8; font-size: 13px; line-height: 1.55; margin-top: 10px; }
+    .target-summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 150px;
+      gap: 12px;
+      align-items: start;
+      margin-top: 12px;
+    }
+    .target-image {
+      min-height: 112px;
+      border: 1px solid #223140;
+      border-radius: 6px;
+      background: #091018;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .target-image img {
+      display: none;
+      max-width: 100%;
+      max-height: 180px;
+      object-fit: contain;
+    }
+    .target-image span {
+      padding: 12px;
+      color: #73889b;
+      font-size: 13px;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .target-image.has-image img { display: block; }
+    .target-image.has-image span { display: none; }
+    .status-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
     .tag {
       display: inline-flex;
       align-items: center;
@@ -145,10 +182,12 @@
     }
     .tag.on { border-color: #3f7d5d; background: #193728; color: #bdf2cf; }
     .tag.off { border-color: #6a3a42; background: #321b22; color: #ffd0d5; }
+    .tag.search { border-color: #806a34; background: #332b17; color: #ffe0a3; }
     @media (max-width: 1120px) {
       main { grid-template-columns: 1fr; padding: 12px; }
       header { align-items: flex-start; flex-direction: column; }
       .manual-controls { grid-template-columns: 1fr; }
+      .target-summary { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -162,14 +201,14 @@
   </header>
 
   <main>
-    <section>
-      <h2>视频预览 / YOLO 检测</h2>
-      <div class="video-wrap">
-        <img id="video" alt="video preview">
-      </div>
-    </section>
-
     <div>
+      <section>
+        <h2>视频预览 / YOLO 检测</h2>
+        <div class="video-wrap">
+          <img id="video" alt="video preview">
+        </div>
+      </section>
+
       <section>
         <h2>人物锁定与跟随</h2>
         <div class="panel-body">
@@ -180,12 +219,21 @@
             <button class="danger" onclick="unlockPerson()">解锁停止</button>
           </div>
           <div class="hint">
-            锁定时会保存当前画面和人物裁剪图。自动跟随仍采用低速安全策略：只使用低速底盘前后移动和柔和云台微调，用目标框面积近似保持 1-2 米距离。
+            只能锁定 YOLO 类别为 person 的目标；锁定时后端会保存当前画面和人物裁剪图。自动跟随仍采用低速安全策略：只使用低速底盘前后移动和柔和云台微调，用目标框面积近似保持 1-2 米距离。
           </div>
-          <pre id="target">等待锁定目标</pre>
+          <div id="targetTags" class="status-tags"></div>
+          <div class="target-summary">
+            <pre id="target">等待锁定目标</pre>
+            <div id="targetImageBox" class="target-image">
+              <img id="targetImage" alt="locked person thumbnail">
+              <span>锁定 person 后显示目标缩略图</span>
+            </div>
+          </div>
         </div>
       </section>
+    </div>
 
+    <div>
       <section>
         <h2>手柄控制</h2>
         <div class="panel-body">
@@ -213,7 +261,7 @@
             </div>
           </div>
           <div class="hint">
-            左侧方向键控制底盘低速前进、后退和原地转向；右侧方向键控制云台。松开方向键会自动停止对应模块，手动底盘控制会暂停自动跟随。
+            左侧方向键控制底盘低速前进、后退和原地转向；右侧方向键控制云台。松开方向键会自动停止对应模块，手柄手动控制会暂停自动跟随。
           </div>
         </div>
       </section>
@@ -250,6 +298,9 @@
     const video = document.getElementById("video");
     const statusBox = document.getElementById("status");
     const targetBox = document.getElementById("target");
+    const targetTags = document.getElementById("targetTags");
+    const targetImageBox = document.getElementById("targetImageBox");
+    const targetImage = document.getElementById("targetImage");
     const detectionsBody = document.getElementById("detections");
     const rawBox = document.getElementById("raw");
 
@@ -355,7 +406,8 @@
 
     function renderDetections(items) {
       detectionsBody.innerHTML = "";
-      for (const item of items) {
+      const top5 = items.slice().sort((a, b) => b.confidence - a.confidence).slice(0, 5);
+      for (const item of top5) {
         const tr = document.createElement("tr");
         const mark = item.is_locked_target ? " <span class=\"tag on\">locked</span>" : "";
         tr.innerHTML = `
@@ -370,18 +422,67 @@
       rawBox.textContent = JSON.stringify(items, null, 2);
     }
 
-    function renderTarget(target, targetDetection) {
+    function formatSearchMode(mode, lastAction) {
+      const value = (mode || "").toString();
+      if (value === "gimbal") return "云台搜索";
+      if (value === "chassis") return "底盘搜索";
+      if (value === "target") return "目标搜索";
+      if (value) return value;
+      const action = (lastAction || "").toString();
+      if (action.includes("gimbal_search")) return "云台搜索";
+      if (action.includes("chassis_search")) return "底盘搜索";
+      if (action.includes("search")) return "搜索中";
+      if (action.includes("target_lost")) return "目标丢失";
+      return "";
+    }
+
+    function renderTargetImage(target) {
+      const locked = target && target.locked;
+      const hasCrop = target && target.crop_path;
+      if (!locked || !hasCrop) {
+        targetImage.removeAttribute("src");
+        targetImageBox.classList.remove("has-image");
+        return;
+      }
+      targetImageBox.classList.add("has-image");
+      targetImage.src = "/locked_target_image?t=" + Date.now();
+    }
+
+    targetImage.addEventListener("load", () => {
+      if (targetImage.src) {
+        targetImageBox.classList.add("has-image");
+      }
+    });
+
+    targetImage.addEventListener("error", () => {
+      targetImage.removeAttribute("src");
+      targetImageBox.classList.remove("has-image");
+    });
+
+    function renderTarget(target, targetDetection, status) {
       const locked = target && target.locked;
       const follow = target && target.auto_follow;
       const lockedTag = locked ? "已锁定" : "未锁定";
       const followTag = follow ? "跟随中" : "未跟随";
+      const searchMode = formatSearchMode(target && target.search_mode, status && status.last_action);
+      const targetState = locked
+        ? (targetDetection ? "目标可见" : (searchMode || "目标丢失"))
+        : "等待锁定 person";
+      targetTags.innerHTML = `
+        <span class="tag ${locked ? "on" : "off"}">${lockedTag}</span>
+        <span class="tag ${follow ? "on" : "off"}">${followTag}</span>
+        <span class="tag ${searchMode ? "search" : ""}">${targetState}</span>
+      `;
       targetBox.textContent =
         `${lockedTag} / ${followTag}\n` +
+        `target_state=${targetState}\n` +
+        `search_mode=${target.search_mode || ""}\n` +
         `locked_at=${target.locked_at || ""}\n` +
         `match_score=${target.last_match_score}\n` +
         `last_seen_age_seconds=${target.last_seen_age_seconds}\n` +
         `crop_path=${target.crop_path || ""}\n` +
         `target_detection=${JSON.stringify(targetDetection || null, null, 2)}`;
+      renderTargetImage(target);
     }
 
     async function refreshStatus() {
@@ -393,7 +494,7 @@
           `robot=${s.robot_connected} video=${s.video_running} yolo=${s.yolo_loaded}\n` +
           `last_action=${s.last_action}\n` +
           `last_error=${s.last_error || ""}`;
-        renderTarget(data.target || {}, data.target_detection);
+        renderTarget(data.target || {}, data.target_detection, s);
         renderDetections(data.detections || []);
       } catch (err) {
         statusBox.textContent = "状态刷新失败: " + err.message;

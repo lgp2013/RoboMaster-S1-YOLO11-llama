@@ -17,9 +17,16 @@ from robomaster import robot
 from ultralytics import YOLO
 
 from config import (
+    ALLOW_TURN_IN_PLACE,
+    AUTO_MOVE_ENABLED,
+    EMERGENCY_STOP,
+    FORWARD_COOLDOWN,
     LLM_BASE_URL,
     LLM_INTERVAL_SECONDS,
     LLM_MODEL,
+    MAX_FORWARD_DURATION,
+    MAX_PERSON_AREA_RATIO_FOR_FORWARD,
+    MIN_PERSON_AREA_RATIO_FOR_FORWARD,
     PERSON_CLASS_ID,
     ROBOT_CONN_TYPE,
     SAFE_BACKWARD_SPEED,
@@ -35,7 +42,7 @@ from config import (
 SYSTEM_PROMPT = """
 你是 RoboMaster S1 机器人控制助手。
 你只能输出 JSON，不要输出 Markdown，不要解释。
-你需要根据 YOLO 检测结果，给机器人一个安全、简单的动作建议。
+你只能根据 YOLO 检测结果给机器人一个动作建议，最终动作会由 Safety Guard 安全层判断。
 
 可选 action 只能是：
 
@@ -58,8 +65,10 @@ SYSTEM_PROMPT = """
 5. 如果检测到 person，并且人在画面下方，优先 gimbal_down。
 6. 如果 person 在画面中间但框很小，说明距离较远，可以 forward。
 7. 如果 person 框很大，说明距离较近，应该 stop。
-8. 不要高速移动，不要连续冲撞。
-9. 只能返回 JSON，例如：
+8. 优先 stop 或云台调整，不要连续 forward。
+9. 不要尝试撞击、冲撞或追逐目标。
+10. 摄像头和 YOLO 不能可靠判断墙面距离，如果不确定应该 stop。
+11. 只能返回 JSON，例如：
    {"action":"gimbal_left","reason":"person is on the left side"}
 """
 
@@ -136,14 +145,110 @@ def classify_scene(person_box: Optional[Box], frame_width: int, frame_height: in
     }
 
 
-def build_scene_text(scene: Dict[str, object]) -> str:
+class SafetyGuard:
+    """Filter LLM action suggestions before they reach the robot.
+
+    The LLM only suggests actions. This guard owns the final decision for
+    chassis movement so accidental repeated forward commands cannot keep the
+    robot driving into a wall.
+    """
+
+    def __init__(self) -> None:
+        self.last_forward_time = 0.0
+        self.forward_start_time = 0.0
+        self.is_forwarding = False
+
+    def stop_forward_tracking(self) -> None:
+        self.is_forwarding = False
+        self.forward_start_time = 0.0
+
+    def filter_action(self, raw_action: str, scene_info: Dict[str, object]) -> Tuple[str, str]:
+        """Return (safe_action, reason) for a raw LLM action suggestion."""
+        if EMERGENCY_STOP:
+            self.stop_forward_tracking()
+            return "stop", "EMERGENCY_STOP=True"
+
+        if raw_action not in ALLOWED_ACTIONS:
+            self.stop_forward_tracking()
+            return "stop", f"Invalid action '{raw_action}' not in whitelist"
+
+        current_time = time.time()
+
+        if raw_action == "stop":
+            self.stop_forward_tracking()
+            return "stop", "LLM suggested stop"
+
+        if not AUTO_MOVE_ENABLED and raw_action in ("forward", "backward"):
+            self.stop_forward_tracking()
+            return "stop", "AUTO_MOVE_ENABLED is False, forward/backward disabled"
+
+        if not scene_info.get("has_person", False):
+            self.stop_forward_tracking()
+            return "stop", "No person detected, stopping for safety"
+
+        if raw_action == "forward":
+            area_ratio = float(scene_info.get("area_ratio", 0.0))
+
+            if area_ratio < MIN_PERSON_AREA_RATIO_FOR_FORWARD:
+                self.stop_forward_tracking()
+                return "stop", (
+                    f"Person area too small for safe forward "
+                    f"({area_ratio:.3f} < {MIN_PERSON_AREA_RATIO_FOR_FORWARD})"
+                )
+
+            if area_ratio > MAX_PERSON_AREA_RATIO_FOR_FORWARD:
+                self.stop_forward_tracking()
+                return "stop", (
+                    f"Person too close for forward "
+                    f"({area_ratio:.3f} > {MAX_PERSON_AREA_RATIO_FOR_FORWARD})"
+                )
+
+            if current_time - self.last_forward_time < FORWARD_COOLDOWN:
+                self.stop_forward_tracking()
+                remaining = FORWARD_COOLDOWN - (current_time - self.last_forward_time)
+                return "stop", f"Forward cooldown active ({remaining:.1f}s remaining)"
+
+            if not self.is_forwarding:
+                self.is_forwarding = True
+                self.forward_start_time = current_time
+                self.last_forward_time = current_time
+
+            if current_time - self.forward_start_time > MAX_FORWARD_DURATION:
+                self.stop_forward_tracking()
+                return "stop", f"Maximum forward duration ({MAX_FORWARD_DURATION}s) exceeded"
+
+            return "forward", "Forward approved by Safety Guard"
+
+        if raw_action == "backward":
+            self.stop_forward_tracking()
+            return "stop", "Backward movement disabled for safety"
+
+        if raw_action in ("turn_left", "turn_right") and not ALLOW_TURN_IN_PLACE:
+            self.stop_forward_tracking()
+            return "stop", "In-place turning disabled"
+
+        if raw_action != "forward":
+            self.stop_forward_tracking()
+
+        return raw_action, "Action approved by Safety Guard"
+
+
+def build_scene_text(scene: Dict[str, object]) -> Tuple[str, Dict[str, object]]:
     if not scene.get("has_person"):
-        return """YOLO检测结果：
+        scene_text = """YOLO检测结果：
 
 * 没有检测到 person
 请输出机器人动作 JSON。"""
+        scene_info = {
+            "has_person": False,
+            "area_ratio": 0.0,
+            "horizontal_position": "none",
+            "vertical_position": "none",
+            "distance": "none",
+        }
+        return scene_text, scene_info
 
-    return f"""YOLO检测结果：
+    scene_text = f"""YOLO检测结果：
 
 * 目标类别: person
 * 置信度: {float(scene["confidence"]):.2f}
@@ -152,6 +257,15 @@ def build_scene_text(scene: Dict[str, object]) -> str:
 * 距离估计: {scene["distance"]}
 * 目标框面积占比: {float(scene["area_ratio"]):.3f}
 请输出机器人动作 JSON。"""
+
+    scene_info = {
+        "has_person": True,
+        "area_ratio": scene["area_ratio"],
+        "horizontal_position": scene["horizontal"],
+        "vertical_position": scene["vertical"],
+        "distance": scene["distance"],
+    }
+    return scene_text, scene_info
 
 
 def extract_json(text: str) -> Dict[str, str]:
@@ -209,27 +323,42 @@ def execute_action(ep_robot: robot.Robot, action: str) -> None:
         chassis.drive_speed(x=0, y=0, z=0)
         gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
     elif action == "gimbal_left":
+        chassis.drive_speed(x=0, y=0, z=0)
         gimbal.drive_speed(pitch_speed=0, yaw_speed=-SAFE_GIMBAL_YAW_SPEED)
     elif action == "gimbal_right":
+        chassis.drive_speed(x=0, y=0, z=0)
         gimbal.drive_speed(pitch_speed=0, yaw_speed=SAFE_GIMBAL_YAW_SPEED)
     elif action == "gimbal_up":
+        chassis.drive_speed(x=0, y=0, z=0)
         gimbal.drive_speed(pitch_speed=SAFE_GIMBAL_PITCH_SPEED, yaw_speed=0)
     elif action == "gimbal_down":
+        chassis.drive_speed(x=0, y=0, z=0)
         gimbal.drive_speed(pitch_speed=-SAFE_GIMBAL_PITCH_SPEED, yaw_speed=0)
     elif action == "turn_left":
+        gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
         chassis.drive_speed(x=0, y=0, z=-SAFE_TURN_SPEED)
     elif action == "turn_right":
+        gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
         chassis.drive_speed(x=0, y=0, z=SAFE_TURN_SPEED)
     elif action == "forward":
         chassis.drive_speed(x=SAFE_FORWARD_SPEED, y=0, z=0)
+        time.sleep(MAX_FORWARD_DURATION)
+        chassis.drive_speed(x=0, y=0, z=0)
     elif action == "backward":
         chassis.drive_speed(x=SAFE_BACKWARD_SPEED, y=0, z=0)
+        time.sleep(MAX_FORWARD_DURATION)
+        chassis.drive_speed(x=0, y=0, z=0)
     else:
         chassis.drive_speed(x=0, y=0, z=0)
         gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
 
 
-def draw_overlay(frame, person_box: Optional[Box], scene: Dict[str, object], decision: Dict[str, str]) -> None:
+def draw_overlay(
+    frame,
+    person_box: Optional[Box],
+    scene: Dict[str, object],
+    decision: Dict[str, str],
+) -> None:
     if person_box is not None:
         x1, y1, x2, y2, confidence = person_box
         cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
@@ -243,8 +372,10 @@ def draw_overlay(frame, person_box: Optional[Box], scene: Dict[str, object], dec
             2,
         )
 
-    action_text = f"action: {decision.get('action', 'stop')}"
-    reason_text = f"reason: {decision.get('reason', '')[:80]}"
+    raw_action = decision.get("raw_action", decision.get("action", "stop"))
+    safe_action = decision.get("safe_action", decision.get("action", "stop"))
+    action_text = f"raw: {raw_action}  safe: {safe_action}"
+    reason_text = f"safety: {decision.get('safety_reason', decision.get('reason', ''))[:90]}"
     cv2.putText(frame, action_text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 220, 255), 2)
     cv2.putText(frame, reason_text, (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 255), 2)
 
@@ -262,7 +393,13 @@ def main() -> int:
     ep_robot = robot.Robot()
     camera = None
     last_llm_time = 0.0
-    decision = {"action": "stop", "reason": "starting"}
+    safety_guard = SafetyGuard()
+    decision = {
+        "raw_action": "stop",
+        "safe_action": "stop",
+        "reason": "starting",
+        "safety_reason": "starting",
+    }
 
     try:
         print(f"Loading YOLO model: {YOLO_MODEL}")
@@ -297,9 +434,17 @@ def main() -> int:
 
             now = time.time()
             if now - last_llm_time >= LLM_INTERVAL_SECONDS:
-                scene_text = build_scene_text(scene)
-                decision = ask_llm(scene_text)
-                execute_action(ep_robot, decision["action"])
+                scene_text, scene_info = build_scene_text(scene)
+                current_decision = ask_llm(scene_text)
+                raw_action = current_decision.get("action", "stop")
+                safe_action, safety_reason = safety_guard.filter_action(raw_action, scene_info)
+                execute_action(ep_robot, safe_action)
+                decision = {
+                    "raw_action": raw_action,
+                    "safe_action": safe_action,
+                    "reason": current_decision.get("reason", ""),
+                    "safety_reason": safety_reason,
+                }
                 last_llm_time = now
 
             draw_overlay(frame, person_box, scene, decision)

@@ -30,3 +30,19 @@ TARGET_CENTER_DEADZONE_Y = 40
 # your room, lens angle, and person size.
 TARGET_FAR_AREA_RATIO = 0.055
 TARGET_NEAR_AREA_RATIO = 0.18
+
+# Locked target search settings.
+TARGET_MATCH_MIN_SCORE = 0.35
+TARGET_LOST_GIMBAL_SEARCH_SECONDS = 8
+TARGET_LOST_CHASSIS_SEARCH_SECONDS = 20
+TARGET_SEARCH_TURN_SPEED = 12
+TARGET_SEARCH_FRONT_WALL_MM = 450
+
+# Safety Guard configuration for obstacle avoidance and movement control
+AUTO_MOVE_ENABLED = False  # Disable LLM direct forward/backward control
+MAX_FORWARD_DURATION = 0.3  # Maximum forward movement duration in seconds
+FORWARD_COOLDOWN = 0.8  # Minimum time between forward movements
+MAX_PERSON_AREA_RATIO_FOR_FORWARD = 0.12  # Max person area ratio to allow forward
+MIN_PERSON_AREA_RATIO_FOR_FORWARD = 0.02  # Min person area ratio to allow forward
+ALLOW_TURN_IN_PLACE = True  # Allow in-place turning when no forward movement
+EMERGENCY_STOP = False  # Emergency stop flag

@@ -187,9 +187,34 @@ python s1_yolo_llm_agent.py
 3. 构造结构化 `scene_text`；
 4. 每隔 `LLM_INTERVAL_SECONDS` 秒请求 llama.cpp；
 5. 解析模型返回 JSON；
-6. 执行安全白名单动作；
-7. 在画面上显示 action 和 reason；
-8. 按 `q` 退出。
+6. `SafetyGuard` 根据安全规则过滤 LLM 建议；
+7. 执行过滤后的安全白名单动作；
+8. 在画面上显示 `raw_action`、`safe_action` 和 `safety_reason`；
+9. 按 `q` 退出。
+
+### Safety Guard 避障与防撞说明
+
+YOLO11 不是避障传感器，普通摄像头也无法可靠判断墙、桌子、柜子等物体的真实距离。因此完整 LLM Agent 默认禁止模型直接控制底盘前进：
+
+```python
+AUTO_MOVE_ENABLED = False
+MAX_FORWARD_DURATION = 0.3
+FORWARD_COOLDOWN = 0.8
+MAX_PERSON_AREA_RATIO_FOR_FORWARD = 0.12
+MIN_PERSON_AREA_RATIO_FOR_FORWARD = 0.02
+ALLOW_TURN_IN_PLACE = True
+EMERGENCY_STOP = False
+```
+
+这意味着：
+
+- LLM 只能给动作建议，最终动作由 `SafetyGuard` 决定。
+- 默认情况下，`forward` 和 `backward` 会被过滤成 `stop`。
+- 云台调整和原地转向仍可用于观察和对准目标。
+- 如果你确实要启用自动前进，必须把 `AUTO_MOVE_ENABLED=True`，并且只在开阔区域测试。
+- 第一次运行必须架空底盘，或放在空旷、无障碍区域。
+
+即使开启 `AUTO_MOVE_ENABLED=True`，Safety Guard 也会限制单次前进时长、前进冷却时间和 person 目标框面积范围，避免模型连续输出 `forward` 后让 S1 持续撞墙。
 
 允许的 action：
 
@@ -224,8 +249,10 @@ http://127.0.0.1:5000
 - 视频画面叠加 YOLO 检测框；
 - 显示最近检测到的类别、置信度、中心点和面积占比；
 - 提供手柄式控制区：左侧方向键控制底盘低速前进、后退和原地转向，右侧方向键控制云台；
-- 将当前识别到的 `person` 拍照并保存到 `media_locked_people/`；
+- 只能锁定 YOLO 类别为 `person` 的目标，将当前识别到的 `person` 拍照并保存到 `media_locked_people/`；
+- 人物锁定区域会显示锁定目标状态、`crop_path`，并通过 `/locked_target_image?t=...` 展示后端保存的人物裁剪缩略图；
 - 锁定一个人物后，用颜色直方图在后续 YOLO person 框中匹配目标；
+- 目标丢失时，页面会展示 `status.last_action` 和 `target.search_mode` 对应的 target/search 状态，例如云台搜索或底盘搜索；
 - 自动跟随锁定人物，仍使用低速安全策略：用柔和云台调整方向，并用低速底盘前后移动近似保持 1-2 米距离；
 - 不使用发射器。
 
@@ -234,11 +261,11 @@ Web 服务使用 Python 标准库实现，不需要额外安装 Flask。
 网页按钮说明：
 
 - `启动`：连接 S1，启动摄像头视频流，加载 YOLO。
-- `锁定并跟随`：选择当前置信度最高的 `person`，保存整帧图和人物裁剪图，并开启自动跟随。
+- `锁定并跟随`：只会选择当前置信度最高的 `person`，保存整帧图和人物裁剪图，并开启自动跟随。
 - `暂停跟随`：保留锁定目标，但停止底盘和云台动作。
 - `继续跟随`：继续跟随已经锁定的人物。
-- 左侧底盘方向键：按住低速移动或原地转向，松开自动停止底盘；手动底盘控制会暂停自动跟随。
-- 云台方向按钮：使用更柔和的半速云台控制，便于近距离调试和观察。
+- 左侧底盘方向键：按住低速移动或原地转向，松开自动停止底盘；手柄手动控制会暂停自动跟随。
+- 云台方向按钮：使用更柔和的半速云台控制，便于近距离调试和观察；手柄手动控制会暂停自动跟随。
 - `解锁停止`：清除锁定目标，并停止底盘和云台。
 - `停止并释放`：停止机器人、视频流和 Web 侧连接资源。
 
