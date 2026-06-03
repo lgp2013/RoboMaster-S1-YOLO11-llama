@@ -10,7 +10,7 @@ person_follower:
     imgsz: 640
     person_class_id: 0
 
-    # Control configuration.
+    # Person follow control configuration.
     control_rate_hz: 15.0
     center_threshold_px: 45
     yaw_gain: 1.2
@@ -21,7 +21,6 @@ person_follower:
     min_angular_speed: 0.10
 
     # Distance is estimated from bbox height ratio, not real meters.
-    # target_distance_m is shown in the dashboard for operator reference.
     target_distance_m: 1.5
     target_bbox_height_ratio: 0.45
     bbox_height_tolerance: 0.08
@@ -29,8 +28,37 @@ person_follower:
     # Safety.
     lost_target_timeout_sec: 0.8
     command_timeout_sec: 0.5
+    image_timeout_sec: 1.0
     enable_backward: true
     enable_auto_move: true
+
+    # MediaPipe Hands gesture recognition.
+    gesture:
+      enabled: true
+      max_num_hands: 2
+      min_detection_confidence: 0.6
+      min_tracking_confidence: 0.5
+      stable_frame_count: 5
+      cooldown_seconds: 2.0
+      turn_angular_speed: 0.6
+      action_duration_sec: 1.0
+      publish_debug_image: false
+
+    # Gesture to command mapping.
+    gesture_actions:
+      open_palm: "STOP"
+      thumbs_up: "START_FOLLOW"
+      fist: "PAUSE"
+      point_left: "TURN_LEFT"
+      point_right: "TURN_RIGHT"
+      victory: "PATROL_READY"
+      ok_sign: "RESUME"
+
+    # Control modes.
+    control_modes:
+      default_mode: "IDLE"
+      follow_mode_enabled: true
+      emergency_stop_enabled: true
 
     # Flask dashboard.
     dashboard_enabled: true

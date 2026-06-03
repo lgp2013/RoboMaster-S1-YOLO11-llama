@@ -1,5 +1,6 @@
 ultralytics>=8.3.0,<8.4.0
 opencv-python
 numpy<2
-Flask>=2.2,<3.0
-PyYAML
+flask>=2.2,<3.0
+pyyaml
+mediapipe==0.10.11

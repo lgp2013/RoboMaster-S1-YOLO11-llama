@@ -1,0 +1,395 @@
+"""ROS2 Foxy node for RoboMaster S1 YOLO person following and gesture control."""
+
+import threading
+import time
+from typing import Dict, List, Optional
+
+import cv2
+import rclpy
+from cv_bridge import CvBridge
+from geometry_msgs.msg import Twist
+from rclpy.node import Node
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+
+from .follower_control import ControlConfig, PersonFollowerController
+from .gesture_controller import ControlMode, GestureController, GestureDebouncer
+from .gesture_detector import GestureDetector, GestureResult, best_gesture
+from .safety import SafetyGuard
+from .utils import json_string_msg, now_sec, twist_to_dict
+from .web_dashboard import DashboardServer
+from .yolo_detector import PersonDetection, YoloPersonDetector
+
+
+class PersonFollowerNode(Node):
+    """第二阶段节点：人体跟随 + 手势模式控制。"""
+
+    def __init__(self) -> None:
+        super().__init__("person_follower")
+        self._declare_parameters()
+        self.bridge = CvBridge()
+        self.lock = threading.Lock()
+
+        self.camera_topic = str(self.get_parameter("camera_topic").value)
+        self.cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
+        self.control_rate_hz = float(self.get_parameter("control_rate_hz").value)
+        self.lost_target_timeout_sec = float(self.get_parameter("lost_target_timeout_sec").value)
+        self.target_distance_m = float(self.get_parameter("target_distance_m").value)
+        self.gesture_enabled = bool(self.get_parameter("gesture.enabled").value)
+        self.publish_debug_image = bool(self.get_parameter("gesture.publish_debug_image").value)
+
+        self.detector = YoloPersonDetector(
+            model_path=str(self.get_parameter("yolo_model").value),
+            confidence=float(self.get_parameter("confidence_threshold").value),
+            imgsz=int(self.get_parameter("imgsz").value),
+            person_class_id=int(self.get_parameter("person_class_id").value),
+        )
+        self.controller = PersonFollowerController(self._control_config())
+        self.safety_guard = SafetyGuard(
+            max_linear_speed=float(self.get_parameter("max_linear_speed").value),
+            max_angular_speed=float(self.get_parameter("max_angular_speed").value),
+            command_timeout_sec=float(self.get_parameter("command_timeout_sec").value),
+            image_timeout_sec=float(self.get_parameter("image_timeout_sec").value),
+        )
+
+        self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
+        self.gesture_state_pub = self.create_publisher(String, "/gesture/state", 10)
+        self.gesture_command_pub = self.create_publisher(String, "/gesture/command", 10)
+        self.gesture_debug_pub = self.create_publisher(Image, "/gesture/debug_image", 5)
+        self.image_sub = self.create_subscription(Image, self.camera_topic, self.image_callback, 10)
+        self.control_timer = self.create_timer(1.0 / self.control_rate_hz, self.control_loop)
+
+        self.gesture_detector = None
+        if self.gesture_enabled:
+            self.gesture_detector = GestureDetector(
+                max_num_hands=int(self.get_parameter("gesture.max_num_hands").value),
+                min_detection_confidence=float(self.get_parameter("gesture.min_detection_confidence").value),
+                min_tracking_confidence=float(self.get_parameter("gesture.min_tracking_confidence").value),
+            )
+        self.gesture_debouncer = GestureDebouncer(
+            stable_frame_count=int(self.get_parameter("gesture.stable_frame_count").value),
+            cooldown_seconds=float(self.get_parameter("gesture.cooldown_seconds").value),
+        )
+        self.gesture_controller = GestureController(
+            state_pub=self.gesture_state_pub,
+            command_pub=self.gesture_command_pub,
+            cmd_pub=self.cmd_pub,
+            gesture_actions=self._gesture_actions(),
+            default_mode=str(self.get_parameter("control_modes.default_mode").value),
+            follow_mode_enabled=bool(self.get_parameter("control_modes.follow_mode_enabled").value),
+            emergency_stop_enabled=bool(self.get_parameter("control_modes.emergency_stop_enabled").value),
+            turn_angular_speed=float(self.get_parameter("gesture.turn_angular_speed").value),
+            action_duration_sec=float(self.get_parameter("gesture.action_duration_sec").value),
+        )
+
+        self.latest_frame = None
+        self.latest_annotated = None
+        self.latest_people: List[PersonDetection] = []
+        self.latest_target: Optional[PersonDetection] = None
+        self.latest_gestures: List[GestureResult] = []
+        self.latest_best_gesture: Optional[GestureResult] = None
+        self.latest_gesture_state: Dict[str, object] = {}
+        self.latest_bbox_height_ratio = 0.0
+        self.latest_reason = "starting"
+        self.latest_safety_reason = "starting"
+        self.latest_cmd = Twist()
+        self.latest_safe_cmd = Twist()
+        self.latest_action = "NONE"
+        self.last_image_time = 0.0
+        self.last_target_time = 0.0
+        self.frame_count = 0
+        self.fps = 0.0
+        self.last_fps_time = time.time()
+
+        self.dashboard = None
+        if bool(self.get_parameter("dashboard_enabled").value):
+            self.dashboard = DashboardServer(
+                host=str(self.get_parameter("dashboard_host").value),
+                port=int(self.get_parameter("dashboard_port").value),
+                jpeg_quality=int(self.get_parameter("jpeg_quality").value),
+                command_callback=self.gesture_controller.handle_web_command,
+            )
+            self.dashboard.start()
+            self.get_logger().info(
+                "Flask Dashboard started at http://%s:%s"
+                % (self.get_parameter("dashboard_host").value, self.get_parameter("dashboard_port").value)
+            )
+
+        self.get_logger().info("Person follower stage2 node started")
+        self.get_logger().info("camera_topic=%s cmd_vel_topic=%s" % (self.camera_topic, self.cmd_vel_topic))
+
+    def _declare_parameters(self) -> None:
+        defaults = {
+            "camera_topic": "/camera/image_color",
+            "cmd_vel_topic": "/cmd_vel",
+            "yolo_model": "yolo11n.pt",
+            "confidence_threshold": 0.45,
+            "imgsz": 640,
+            "person_class_id": 0,
+            "control_rate_hz": 15.0,
+            "center_threshold_px": 45,
+            "yaw_gain": 1.2,
+            "distance_gain": 0.8,
+            "max_linear_speed": 0.30,
+            "min_linear_speed": 0.06,
+            "max_angular_speed": 1.0,
+            "min_angular_speed": 0.10,
+            "target_distance_m": 1.5,
+            "target_bbox_height_ratio": 0.45,
+            "bbox_height_tolerance": 0.08,
+            "lost_target_timeout_sec": 0.8,
+            "command_timeout_sec": 0.5,
+            "image_timeout_sec": 1.0,
+            "enable_backward": True,
+            "enable_auto_move": True,
+            "dashboard_enabled": True,
+            "dashboard_host": "0.0.0.0",
+            "dashboard_port": 8088,
+            "jpeg_quality": 80,
+            "gesture.enabled": True,
+            "gesture.max_num_hands": 2,
+            "gesture.min_detection_confidence": 0.6,
+            "gesture.min_tracking_confidence": 0.5,
+            "gesture.stable_frame_count": 5,
+            "gesture.cooldown_seconds": 2.0,
+            "gesture.turn_angular_speed": 0.6,
+            "gesture.action_duration_sec": 1.0,
+            "gesture.publish_debug_image": False,
+            "gesture_actions.open_palm": "STOP",
+            "gesture_actions.thumbs_up": "START_FOLLOW",
+            "gesture_actions.fist": "PAUSE",
+            "gesture_actions.point_left": "TURN_LEFT",
+            "gesture_actions.point_right": "TURN_RIGHT",
+            "gesture_actions.victory": "PATROL_READY",
+            "gesture_actions.ok_sign": "RESUME",
+            "control_modes.default_mode": "IDLE",
+            "control_modes.follow_mode_enabled": True,
+            "control_modes.emergency_stop_enabled": True,
+        }
+        for name, value in defaults.items():
+            self.declare_parameter(name, value)
+
+    def _control_config(self) -> ControlConfig:
+        return ControlConfig(
+            center_threshold_px=int(self.get_parameter("center_threshold_px").value),
+            yaw_gain=float(self.get_parameter("yaw_gain").value),
+            distance_gain=float(self.get_parameter("distance_gain").value),
+            max_linear_speed=float(self.get_parameter("max_linear_speed").value),
+            min_linear_speed=float(self.get_parameter("min_linear_speed").value),
+            max_angular_speed=float(self.get_parameter("max_angular_speed").value),
+            min_angular_speed=float(self.get_parameter("min_angular_speed").value),
+            target_bbox_height_ratio=float(self.get_parameter("target_bbox_height_ratio").value),
+            bbox_height_tolerance=float(self.get_parameter("bbox_height_tolerance").value),
+            enable_backward=bool(self.get_parameter("enable_backward").value),
+            enable_auto_move=bool(self.get_parameter("enable_auto_move").value),
+        )
+
+    def _gesture_actions(self) -> Dict[str, str]:
+        names = ["open_palm", "thumbs_up", "fist", "point_left", "point_right", "victory", "ok_sign"]
+        return {name: str(self.get_parameter("gesture_actions.%s" % name).value) for name in names}
+
+    def image_callback(self, msg: Image) -> None:
+        try:
+            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        except Exception as exc:
+            self.get_logger().error("cv_bridge convert failed: %s" % exc)
+            self.publish_stop("cv_bridge failed")
+            return
+
+        try:
+            people = self.detector.detect(frame)
+            target = self.detector.select_largest_person(people)
+            annotated = frame.copy()
+            self.detector.draw_detections(annotated, people, target)
+
+            gestures: List[GestureResult] = []
+            best = None
+            if self.gesture_detector is not None:
+                gestures = self.gesture_detector.detect(frame)
+                self.gesture_detector.draw(annotated, gestures)
+                best = best_gesture(gestures)
+
+            triggered, gesture_state = self.gesture_debouncer.update(best)
+            if best is not None and best.gesture == "open_palm":
+                if self.gesture_controller.mode != ControlMode.EMERGENCY_STOP:
+                    self.gesture_controller.force_stop(source="gesture_immediate", gesture="open_palm")
+                self.publish_stop("open_palm immediate stop")
+            if triggered is not None:
+                self.gesture_controller.handle_stable_gesture(triggered)
+            self.gesture_controller.publish_state(gesture_state, best)
+            self._draw_overlay(annotated, gesture_state)
+            self._update_fps()
+
+            now = now_sec()
+            with self.lock:
+                self.latest_frame = frame
+                self.latest_annotated = annotated
+                self.latest_people = people
+                self.latest_target = target
+                self.latest_gestures = gestures
+                self.latest_best_gesture = best
+                self.latest_gesture_state = gesture_state
+                self.last_image_time = now
+                if target is not None:
+                    self.last_target_time = now
+
+            if self.publish_debug_image:
+                self.gesture_debug_pub.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
+
+            if self.dashboard is not None:
+                self.dashboard.update(annotated, self._status_dict())
+
+        except Exception as exc:
+            self.get_logger().error("image processing failed, stopping robot: %s" % exc)
+            self.publish_stop("image processing exception")
+
+    def _draw_overlay(self, frame, gesture_state: Dict[str, object]) -> None:
+        lines = [
+            "mode: %s" % self.gesture_controller.mode,
+            "candidate: %s x%s" % (gesture_state.get("candidate", "none"), gesture_state.get("candidate_count", 0)),
+            "stable: %s" % gesture_state.get("stable_gesture", "none"),
+            "action: %s" % self.latest_action,
+        ]
+        y = 24
+        for line in lines:
+            cv2.putText(frame, line, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+            y += 24
+
+    def _update_fps(self) -> None:
+        self.frame_count += 1
+        now = time.time()
+        elapsed = now - self.last_fps_time
+        if elapsed >= 1.0:
+            self.fps = self.frame_count / elapsed
+            self.frame_count = 0
+            self.last_fps_time = now
+
+    def control_loop(self) -> None:
+        with self.lock:
+            frame = self.latest_frame
+            target = self.latest_target
+            last_image_time = self.last_image_time
+            last_target_time = self.last_target_time
+
+        if frame is None:
+            self.publish_stop("no image")
+            return
+
+        now = now_sec()
+        image_age = now - last_image_time if last_image_time else 999.0
+        if image_age > float(self.get_parameter("image_timeout_sec").value):
+            self.publish_stop("image timeout")
+            return
+
+        override_cmd, action_name = self.gesture_controller.get_override_cmd()
+        mode = self.gesture_controller.mode
+        self.latest_action = action_name
+
+        if mode in (ControlMode.IDLE, ControlMode.EMERGENCY_STOP, ControlMode.PATROL_READY):
+            self.publish_stop("mode %s" % mode)
+            return
+
+        if mode == ControlMode.GESTURE_CONTROL and override_cmd is not None:
+            safe_cmd, safety_reason = self.safety_guard.filter_cmd(override_cmd, True, image_age)
+            self._publish_cmd(safe_cmd, override_cmd, "gesture action %s" % action_name, safety_reason)
+            return
+
+        if mode != ControlMode.FOLLOW:
+            self.publish_stop("mode %s" % mode)
+            return
+
+        has_fresh_target = target is not None and (now - last_target_time) <= self.lost_target_timeout_sec
+        if not has_fresh_target:
+            self.publish_stop("target lost")
+            return
+
+        height, width = frame.shape[:2]
+        cmd, reason, bbox_height_ratio = self.controller.compute_cmd(target, width, height)
+        safe_cmd, safety_reason = self.safety_guard.filter_cmd(cmd, True, image_age)
+        self.latest_bbox_height_ratio = bbox_height_ratio
+        self._publish_cmd(safe_cmd, cmd, reason, safety_reason)
+
+    def _publish_cmd(self, safe_cmd: Twist, raw_cmd: Twist, reason: str, safety_reason: str) -> None:
+        self.cmd_pub.publish(safe_cmd)
+        self.latest_cmd = raw_cmd
+        self.latest_safe_cmd = safe_cmd
+        self.latest_reason = reason
+        self.latest_safety_reason = safety_reason
+
+    def publish_stop(self, reason: str = "stop") -> None:
+        stop = Twist()
+        self.cmd_pub.publish(stop)
+        self.latest_cmd = stop
+        self.latest_safe_cmd = stop
+        self.latest_reason = reason
+        self.latest_safety_reason = "stop"
+
+    def _status_dict(self) -> Dict[str, object]:
+        target = self.latest_target
+        target_info = None
+        if target is not None:
+            target_info = {
+                "bbox": [round(target.x1, 1), round(target.y1, 1), round(target.x2, 1), round(target.y2, 1)],
+                "confidence": round(target.confidence, 3),
+                "area": round(target.area, 1),
+                "center_x": round(target.center_x, 1),
+                "bbox_height_ratio": round(self.latest_bbox_height_ratio, 3),
+            }
+        gesture = self.latest_best_gesture
+        gesture_info = {
+            "current": gesture.gesture if gesture is not None else "none",
+            "confidence": round(gesture.confidence, 3) if gesture is not None else 0.0,
+            "candidate": self.latest_gesture_state.get("candidate", "none"),
+            "candidate_count": self.latest_gesture_state.get("candidate_count", 0),
+            "stable_gesture": self.latest_gesture_state.get("stable_gesture", "none"),
+            "cooldown_remaining": self.latest_gesture_state.get("cooldown_remaining", 0.0),
+        }
+        return {
+            "fps": round(self.fps, 2),
+            "mode": self.gesture_controller.mode,
+            "camera_topic": self.camera_topic,
+            "cmd_vel_topic": self.cmd_vel_topic,
+            "people_count": len(self.latest_people),
+            "target": target_info,
+            "target_distance_m": self.target_distance_m,
+            "gesture": gesture_info,
+            "gesture_logs": list(self.gesture_controller.logs),
+            "raw_cmd": twist_to_dict(self.latest_cmd),
+            "safe_cmd": twist_to_dict(self.latest_safe_cmd),
+            "control_reason": self.latest_reason,
+            "safety_reason": self.latest_safety_reason,
+            "last_image_age_sec": round(time.time() - self.last_image_time, 2) if self.last_image_time else None,
+            "last_target_age_sec": round(time.time() - self.last_target_time, 2) if self.last_target_time else None,
+        }
+
+    def destroy_node(self) -> bool:
+        self.publish_stop("destroy node")
+        if self.gesture_detector is not None:
+            self.gesture_detector.close()
+        return super().destroy_node()
+
+
+def main(args=None) -> None:
+    rclpy.init(args=args)
+    node = None
+    try:
+        node = PersonFollowerNode()
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        if node is not None:
+            node.get_logger().info("KeyboardInterrupt, stopping robot")
+    except Exception as exc:
+        if node is not None:
+            node.get_logger().error("Unhandled exception: %s" % exc)
+            node.publish_stop("unhandled exception")
+        else:
+            print("person_follower_node failed before startup: %s" % exc)
+    finally:
+        if node is not None:
+            node.publish_stop("shutdown")
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import cv2
-from ultralytics import YOLO
 
 
 @dataclass
@@ -44,6 +43,16 @@ class YoloPersonDetector:
     """封装 YOLO11 检测，避免主节点堆太多视觉代码。"""
 
     def __init__(self, model_path: str, confidence: float, imgsz: int, person_class_id: int = 0) -> None:
+        try:
+            from ultralytics import YOLO
+        except ImportError as exc:
+            raise RuntimeError(
+                "缺少 Python 依赖 ultralytics。请在 ROS2 工作空间中执行：\n"
+                "  cd ~/rm_ws\n"
+                "  python3 -m pip install -r src/person_follower/requirements.txt\n"
+                "如果使用 root 运行 ROS2，也必须用 root 的 python3 安装依赖。"
+            ) from exc
+
         self.model_path = model_path
         self.confidence = confidence
         self.imgsz = imgsz
