@@ -32,6 +32,25 @@ const i18n = {
     copyLogs: "COPY",
     copied: "Copied",
     copyFailed: "Copy failed",
+    settings: "SETTINGS",
+    settingsTitle: "SYSTEM SETTINGS",
+    close: "CLOSE",
+    robotIp: "Robot IP",
+    llmEnabled: "LLM Enabled",
+    llmBaseUrl: "LLM Base URL",
+    llmModel: "LLM Model",
+    vlmEnabled: "VLM Enabled",
+    vlmBaseUrl: "VLM Base URL",
+    vlmModel: "VLM Model",
+    agentEnabled: "Agent Enabled",
+    manualForwardSpeed: "Manual Forward Speed",
+    manualTurnSpeed: "Manual Turn Speed",
+    manualDuration: "Manual Duration",
+    coreData: "Core Data",
+    reload: "RELOAD",
+    saveSettings: "SAVE SETTINGS",
+    settingsSaved: "Settings applied at runtime.",
+    settingsFailed: "Settings update failed",
     agentPlaceholder: "Task: What do you see? / Find the cup / Follow me",
     linked: "linked",
     lost: "lost",
@@ -79,6 +98,25 @@ const i18n = {
     copyLogs: "复制",
     copied: "已复制",
     copyFailed: "复制失败",
+    settings: "设置",
+    settingsTitle: "系统设置",
+    close: "关闭",
+    robotIp: "机器人 IP",
+    llmEnabled: "启用 LLM",
+    llmBaseUrl: "LLM 地址",
+    llmModel: "LLM 模型",
+    vlmEnabled: "启用 VLM",
+    vlmBaseUrl: "VLM 地址",
+    vlmModel: "VLM 模型",
+    agentEnabled: "启用 Agent",
+    manualForwardSpeed: "手动前进速度",
+    manualTurnSpeed: "手动转向速度",
+    manualDuration: "手动动作时长",
+    coreData: "核心数据",
+    reload: "重新读取",
+    saveSettings: "保存设置",
+    settingsSaved: "设置已在运行时生效。",
+    settingsFailed: "设置更新失败",
     agentPlaceholder: "任务：你看到了什么？ / 帮我找水杯 / 跟着我",
     linked: "已连接",
     lost: "断开",
@@ -286,6 +324,86 @@ function showLogHint(text) {
   setTimeout(() => hint.classList.remove("show"), 1600);
 }
 
+function openSettings() {
+  document.getElementById("settingsModal")?.classList.add("open");
+  loadSettings();
+}
+
+function closeSettings() {
+  document.getElementById("settingsModal")?.classList.remove("open");
+}
+
+async function loadSettings() {
+  try {
+    const res = await fetch("/api/settings");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || "settings unavailable");
+    fillSettings(data.settings || {}, data.core || {});
+    setText("settingsMessage", "");
+  } catch (err) {
+    setText("settingsMessage", `${t("settingsFailed")}: ${err}`);
+  }
+}
+
+function fillSettings(settings, core) {
+  setInputValue("settingRobotIp", settings.robot_ip);
+  setInputChecked("settingLlmEnabled", settings.llm_enabled);
+  setInputValue("settingLlmBaseUrl", settings.llm_base_url);
+  setInputValue("settingLlmModel", settings.llm_model);
+  setInputChecked("settingVlmEnabled", settings.vlm_enabled);
+  setInputValue("settingVlmBaseUrl", settings.vlm_base_url);
+  setInputValue("settingVlmModel", settings.vlm_model);
+  setInputChecked("settingAgentEnabled", settings.agent_enabled);
+  setInputValue("settingManualForwardSpeed", settings.manual_forward_speed);
+  setInputValue("settingManualTurnSpeed", settings.manual_turn_speed);
+  setInputValue("settingManualDuration", settings.manual_action_duration);
+  setText("settingsCoreData", JSON.stringify(core, null, 2));
+}
+
+function setInputValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value ?? "";
+}
+
+function setInputChecked(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.checked = Boolean(value);
+}
+
+function readSettingsForm() {
+  return {
+    robot_ip: document.getElementById("settingRobotIp")?.value || "",
+    llm_enabled: document.getElementById("settingLlmEnabled")?.checked || false,
+    llm_base_url: document.getElementById("settingLlmBaseUrl")?.value || "",
+    llm_model: document.getElementById("settingLlmModel")?.value || "",
+    vlm_enabled: document.getElementById("settingVlmEnabled")?.checked || false,
+    vlm_base_url: document.getElementById("settingVlmBaseUrl")?.value || "",
+    vlm_model: document.getElementById("settingVlmModel")?.value || "",
+    agent_enabled: document.getElementById("settingAgentEnabled")?.checked || false,
+    manual_forward_speed: Number(document.getElementById("settingManualForwardSpeed")?.value || 0),
+    manual_turn_speed: Number(document.getElementById("settingManualTurnSpeed")?.value || 0),
+    manual_action_duration: Number(document.getElementById("settingManualDuration")?.value || 0),
+  };
+}
+
+async function saveSettings() {
+  try {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: readSettingsForm() }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message || "settings rejected");
+    fillSettings(data.settings || {}, data.core || {});
+    setText("settingsMessage", t("settingsSaved"));
+    await refreshStatus();
+    await refreshLogs(true);
+  } catch (err) {
+    setText("settingsMessage", `${t("settingsFailed")}: ${err}`);
+  }
+}
+
 function toggleLogLock(forceValue = null) {
   state.logsLocked = forceValue === null ? !state.logsLocked : Boolean(forceValue);
   const button = document.getElementById("logLockToggle");
@@ -310,6 +428,13 @@ function boot() {
   document.getElementById("logLockToggle")?.addEventListener("click", () => toggleLogLock());
   document.getElementById("copyLogs")?.addEventListener("click", copyLogs);
   document.getElementById("eventLog")?.addEventListener("mouseenter", () => toggleLogLock(true));
+  document.getElementById("settingsToggle")?.addEventListener("click", openSettings);
+  document.getElementById("settingsClose")?.addEventListener("click", closeSettings);
+  document.getElementById("settingsReload")?.addEventListener("click", loadSettings);
+  document.getElementById("settingsSave")?.addEventListener("click", saveSettings);
+  document.getElementById("settingsModal")?.addEventListener("click", (event) => {
+    if (event.target?.id === "settingsModal") closeSettings();
+  });
 
   applyLanguage();
   setInterval(() => {

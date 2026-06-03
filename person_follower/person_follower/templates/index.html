@@ -19,6 +19,7 @@
       <div class="status-pill"><span class="lamp" id="rosLamp"></span><span>ROS</span><strong id="rosState">--</strong></div>
       <div class="status-pill"><span class="lamp" id="llmLamp"></span><span>LLM</span><strong id="llmState">--</strong></div>
       <div class="status-pill"><span class="lamp" id="cameraLamp"></span><span>CAM</span><strong id="cameraState">--</strong></div>
+      <button class="settings-toggle" id="settingsToggle" type="button" data-i18n="settings">SETTINGS</button>
       <button class="lang-toggle" id="langToggle" type="button">中文</button>
       <div class="clock" id="clock">--:--:--</div>
     </div>
@@ -107,6 +108,39 @@
       <ul id="eventLog"></ul>
     </section>
   </main>
+
+  <div class="modal-backdrop" id="settingsModal" aria-hidden="true">
+    <section class="settings-modal cut-panel" role="dialog" aria-modal="true">
+      <div class="panel-header">
+        <span data-i18n="settingsTitle">SYSTEM SETTINGS</span>
+        <button class="micro-button" id="settingsClose" type="button" data-i18n="close">CLOSE</button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-form">
+          <label><span data-i18n="robotIp">Robot IP</span><input id="settingRobotIp"></label>
+          <label><span data-i18n="llmEnabled">LLM Enabled</span><input id="settingLlmEnabled" type="checkbox"></label>
+          <label><span data-i18n="llmBaseUrl">LLM Base URL</span><input id="settingLlmBaseUrl"></label>
+          <label><span data-i18n="llmModel">LLM Model</span><input id="settingLlmModel"></label>
+          <label><span data-i18n="vlmEnabled">VLM Enabled</span><input id="settingVlmEnabled" type="checkbox"></label>
+          <label><span data-i18n="vlmBaseUrl">VLM Base URL</span><input id="settingVlmBaseUrl"></label>
+          <label><span data-i18n="vlmModel">VLM Model</span><input id="settingVlmModel"></label>
+          <label><span data-i18n="agentEnabled">Agent Enabled</span><input id="settingAgentEnabled" type="checkbox"></label>
+          <label><span data-i18n="manualForwardSpeed">Manual Forward Speed</span><input id="settingManualForwardSpeed" type="number" step="0.01"></label>
+          <label><span data-i18n="manualTurnSpeed">Manual Turn Speed</span><input id="settingManualTurnSpeed" type="number" step="0.01"></label>
+          <label><span data-i18n="manualDuration">Manual Duration</span><input id="settingManualDuration" type="number" step="0.1"></label>
+        </div>
+        <aside class="settings-core">
+          <h3 data-i18n="coreData">Core Data</h3>
+          <pre id="settingsCoreData">{}</pre>
+          <p id="settingsMessage">--</p>
+        </aside>
+      </div>
+      <div class="settings-actions">
+        <button id="settingsReload" type="button" data-i18n="reload">RELOAD</button>
+        <button id="settingsSave" type="button" data-i18n="saveSettings">SAVE SETTINGS</button>
+      </div>
+    </section>
+  </div>
 
   <script src="/static/js/dashboard.js?v={{ dashboard_version }}"></script>
 </body>

@@ -25,12 +25,14 @@ class DashboardServer:
         port: int,
         jpeg_quality: int = 80,
         command_callback: Optional[Callable[[str, Dict[str, object]], Dict[str, object]]] = None,
+        settings_callback: Optional[Callable[[Optional[Dict[str, object]]], Dict[str, object]]] = None,
     ) -> None:
         package_dir = os.path.dirname(os.path.abspath(__file__))
         self.host = host
         self.port = int(port)
         self.jpeg_quality = int(jpeg_quality)
         self.command_callback = command_callback
+        self.settings_callback = settings_callback
         self.lock = threading.Lock()
         self.latest_frame = None
         self.status: Dict[str, object] = {}
@@ -81,6 +83,20 @@ class DashboardServer:
                 return jsonify({"logs": logs})
             except Exception as exc:
                 return jsonify({"ok": False, "message": str(exc), "logs": []}), 500
+
+        @self.app.route("/api/settings", methods=["GET", "POST"])
+        def api_settings():
+            if self.settings_callback is None:
+                return jsonify({"ok": False, "message": "no settings callback"}), 503
+            try:
+                if request.method == "GET":
+                    return jsonify(self.settings_callback(None))
+                payload = request.get_json(silent=True) or {}
+                result = self.settings_callback(payload)
+                self._merge_callback_status(result)
+                return jsonify(result)
+            except Exception as exc:
+                return jsonify({"ok": False, "message": str(exc)}), 500
 
         @self.app.route("/api/control", methods=["POST"])
         def api_control():

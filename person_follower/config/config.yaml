@@ -3,6 +3,7 @@ person_follower:
     # ROS topics from robomaster_ros.
     camera_topic: "/camera/image_color"
     cmd_vel_topic: "/cmd_vel"
+    robot_ip: "10.10.10.152"
 
     # YOLO11 configuration.
     yolo_model: "yolo11n.pt"

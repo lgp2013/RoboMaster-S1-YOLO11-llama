@@ -37,6 +37,7 @@ class PersonFollowerNode(Node):
 
         self.camera_topic = str(self.get_parameter("camera_topic").value)
         self.cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
+        self.robot_ip = str(self.get_parameter("robot_ip").value)
         self.control_rate_hz = float(self.get_parameter("control_rate_hz").value)
         self.lost_target_timeout_sec = float(self.get_parameter("lost_target_timeout_sec").value)
         self.target_distance_m = float(self.get_parameter("target_distance_m").value)
@@ -149,6 +150,7 @@ class PersonFollowerNode(Node):
                 port=int(self.get_parameter("dashboard_port").value),
                 jpeg_quality=int(self.get_parameter("jpeg_quality").value),
                 command_callback=self.handle_dashboard_command,
+                settings_callback=self.handle_dashboard_settings,
             )
             self.dashboard.start()
             self.get_logger().info(
@@ -165,6 +167,7 @@ class PersonFollowerNode(Node):
         defaults = {
             "camera_topic": "/camera/image_color",
             "cmd_vel_topic": "/cmd_vel",
+            "robot_ip": "10.10.10.152",
             "yolo_model": "yolo11n.pt",
             "confidence_threshold": 0.45,
             "imgsz": 640,
@@ -293,6 +296,65 @@ class PersonFollowerNode(Node):
             self.event_logs.clear()
             return {"ok": True, "message": "logs cleared", "event_logs": []}
         return self.gesture_controller.handle_web_command(command)
+
+    def handle_dashboard_settings(self, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
+        """读取或更新 Dashboard 运行时设置。不会直接写磁盘配置文件。"""
+        if payload is None:
+            return {"ok": True, "settings": self.current_settings(), "core": self.core_data()}
+
+        settings = payload.get("settings", payload) if isinstance(payload, dict) else {}
+        if not isinstance(settings, dict):
+            return {"ok": False, "message": "invalid settings payload"}
+
+        self.robot_ip = str(settings.get("robot_ip", self.robot_ip)).strip() or self.robot_ip
+        self.planner_agent.base_url = str(settings.get("llm_base_url", self.planner_agent.base_url)).strip()
+        self.planner_agent.model = str(settings.get("llm_model", self.planner_agent.model)).strip()
+        self.planner_agent.enabled = bool(settings.get("llm_enabled", self.planner_agent.enabled))
+        self.vision_agent.base_url = str(settings.get("vlm_base_url", self.vision_agent.base_url)).strip()
+        self.vision_agent.model = str(settings.get("vlm_model", self.vision_agent.model)).strip()
+        self.vision_agent.enabled = bool(settings.get("vlm_enabled", self.vision_agent.enabled))
+        self.agent_enabled = bool(settings.get("agent_enabled", self.agent_enabled))
+
+        try:
+            self.robot_executor.forward_speed = abs(float(settings.get("manual_forward_speed", self.robot_executor.forward_speed)))
+            self.robot_executor.turn_speed = abs(float(settings.get("manual_turn_speed", self.robot_executor.turn_speed)))
+            self.robot_executor.action_duration_sec = float(settings.get("manual_action_duration", self.robot_executor.action_duration_sec))
+        except Exception as exc:
+            return {"ok": False, "message": "invalid speed setting: %s" % exc}
+
+        self.log_event("settings updated from dashboard")
+        return {"ok": True, "settings": self.current_settings(), "core": self.core_data(), "event_logs": list(self.event_logs)}
+
+    def current_settings(self) -> Dict[str, object]:
+        """返回可在设置弹窗中编辑的运行时配置。"""
+        return {
+            "robot_ip": self.robot_ip,
+            "llm_enabled": self.planner_agent.enabled,
+            "llm_base_url": self.planner_agent.base_url,
+            "llm_model": self.planner_agent.model,
+            "vlm_enabled": self.vision_agent.enabled,
+            "vlm_base_url": self.vision_agent.base_url,
+            "vlm_model": self.vision_agent.model,
+            "agent_enabled": self.agent_enabled,
+            "manual_forward_speed": self.robot_executor.forward_speed,
+            "manual_turn_speed": self.robot_executor.turn_speed,
+            "manual_action_duration": self.robot_executor.action_duration_sec,
+        }
+
+    def core_data(self) -> Dict[str, object]:
+        """设置弹窗展示的核心运行数据。"""
+        return {
+            "dashboard_version": DASHBOARD_VERSION,
+            "camera_topic": self.camera_topic,
+            "cmd_vel_topic": self.cmd_vel_topic,
+            "robot_ip": self.robot_ip,
+            "battery": self.battery_percent,
+            "mode": self.gesture_controller.mode,
+            "fps": round(self.fps, 2),
+            "llm_status": "online" if self.agent_enabled and not self.latest_agent_error else "standby",
+            "camera_status": "online" if (time.time() - self.last_image_time) < 2.0 else "offline",
+            "last_error": self.latest_agent_error,
+        }
 
     def start_manual_override(self, command: str) -> None:
         """Web 手动接管：固定低速短动作，优先级高于 Agent/FOLLOW。"""
@@ -609,6 +671,7 @@ class PersonFollowerNode(Node):
             "mode": self.gesture_controller.mode,
             "camera_topic": self.camera_topic,
             "cmd_vel_topic": self.cmd_vel_topic,
+            "robot_ip": self.robot_ip,
             "people_count": len(self.latest_people),
             "target": target_info,
             "target_distance_m": self.target_distance_m,

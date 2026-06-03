@@ -353,6 +353,20 @@ button.danger:hover {
   box-shadow: 0 0 24px rgba(217, 164, 65, 0.16);
 }
 
+.top-status .settings-toggle {
+  min-width: 96px;
+  height: 38px;
+  padding: 0 12px;
+  color: var(--cyan);
+  border-color: rgba(120, 240, 228, 0.42);
+  background: linear-gradient(180deg, rgba(16, 43, 39, 0.92), rgba(8, 18, 15, 0.92));
+}
+
+.top-status .settings-toggle:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 24px rgba(120, 240, 228, 0.18);
+}
+
 .log-panel { grid-column: 2; grid-row: 2; }
 
 .log-header {
@@ -411,6 +425,98 @@ button.danger:hover {
   margin-bottom: 8px;
 }
 
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(4px);
+}
+
+.modal-backdrop.open {
+  display: flex;
+}
+
+.settings-modal {
+  width: min(980px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+}
+
+.settings-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 14px;
+  padding: 14px;
+}
+
+.settings-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.settings-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-form input {
+  width: 100%;
+}
+
+.settings-form input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--cyan);
+}
+
+.settings-core {
+  min-height: 0;
+  padding: 12px;
+  background: rgba(5, 13, 10, 0.58);
+  border: 1px solid rgba(120, 240, 228, 0.14);
+}
+
+.settings-core h3 {
+  margin: 0 0 10px;
+  color: var(--amber);
+  font-size: 13px;
+}
+
+.settings-core pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-size: 12px;
+}
+
+#settingsMessage {
+  min-height: 18px;
+  color: var(--amber);
+  font-size: 12px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.settings-actions button {
+  min-width: 140px;
+  height: 42px;
+}
+
 @media (max-width: 1440px) {
   .console-shell {
     grid-template-columns: minmax(620px, 1fr) 380px;
@@ -433,4 +539,6 @@ button.danger:hover {
   .right-stack, .control-panel, .log-panel { grid-column: 1; grid-row: auto; }
   .topbar { height: auto; align-items: flex-start; gap: 12px; flex-direction: column; }
   .top-status { flex-wrap: wrap; }
+  .settings-body { grid-template-columns: 1fr; }
+  .settings-form { grid-template-columns: 1fr; }
 }
