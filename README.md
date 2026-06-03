@@ -35,7 +35,47 @@ ModuleNotFoundError: No module named 'requests'
 
 说明当前 Python 环境没有安装依赖。请先执行下面的安装步骤。
 
-### 方案 A：使用当前全局 Python 3.8
+### 方案 A：使用上一级已验证 `.venv`
+
+如果你已经在 `D:\codex\dji-s1\.venv` 里装好了 RoboMaster SDK、OpenCV、YOLO 等依赖，推荐直接使用这个环境运行。
+
+进入项目目录：
+
+```powershell
+cd D:\codex\dji-s1\RoboMaster-S1-YOLO11-llama-demo
+```
+
+运行 LLM 接口测试：
+
+```powershell
+..\.venv\Scripts\python.exe .\test_llm_api.py
+```
+
+运行 S1 摄像头 + YOLO 测试：
+
+```powershell
+..\.venv\Scripts\python.exe .\test_s1_camera_yolo.py
+```
+
+运行云台跟随：
+
+```powershell
+..\.venv\Scripts\python.exe .\s1_yolo_gimbal_follow.py
+```
+
+运行完整 LLM Agent：
+
+```powershell
+..\.venv\Scripts\python.exe .\s1_yolo_llm_agent.py
+```
+
+如果缺少依赖，请安装到上一级 `.venv`：
+
+```powershell
+..\.venv\Scripts\python.exe -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+```
+
+### 方案 B：使用当前全局 Python 3.8
 
 你当前机器上的 `python` 是：
 
@@ -56,7 +96,7 @@ python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirement
 python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple requests
 ```
 
-### 方案 B：使用项目内 `.venv`
+### 方案 C：使用项目内 `.venv`
 
 如果你希望依赖隔离在当前工程里：
 
