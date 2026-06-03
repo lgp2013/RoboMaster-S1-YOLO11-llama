@@ -4,3 +4,4 @@ numpy<2
 flask>=2.2,<3.0
 pyyaml
 mediapipe==0.10.11
+requests

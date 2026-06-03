@@ -60,6 +60,29 @@ person_follower:
       follow_mode_enabled: true
       emergency_stop_enabled: true
 
+    # OpenAI-compatible Llama Server for text planning.
+    llm:
+      enabled: true
+      base_url: "http://127.0.0.1:8080/v1"
+      model: "qwen3"
+      timeout_sec: 8.0
+
+    # OpenAI-compatible vision-language model, for example Qwen3-VL.
+    vlm:
+      enabled: true
+      base_url: "http://127.0.0.1:8080/v1"
+      model: "qwen3-vl"
+      timeout_sec: 8.0
+
+    # Vision-Language-Agent planning loop.
+    agent:
+      enabled: true
+      max_history: 20
+      planning_interval: 2.0
+      forward_speed: 0.12
+      turn_speed: 0.45
+      action_duration_sec: 0.8
+
     # Flask dashboard.
     dashboard_enabled: true
     dashboard_host: "0.0.0.0"

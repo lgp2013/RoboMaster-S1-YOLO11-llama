@@ -15,8 +15,12 @@ from std_msgs.msg import String
 from .follower_control import ControlConfig, PersonFollowerController
 from .gesture_controller import ControlMode, GestureController, GestureDebouncer
 from .gesture_detector import GestureDetector, GestureResult, best_gesture
+from .planner_agent import PlannerAgent
+from .robot_executor import RobotExecutor
 from .safety import SafetyGuard
+from .scene_understanding import build_scene_summary
 from .utils import json_string_msg, now_sec, twist_to_dict
+from .vision_agent import VisionAgent
 from .web_dashboard import DashboardServer
 from .yolo_detector import PersonDetection, YoloPersonDetector
 
@@ -37,6 +41,7 @@ class PersonFollowerNode(Node):
         self.target_distance_m = float(self.get_parameter("target_distance_m").value)
         self.gesture_enabled = bool(self.get_parameter("gesture.enabled").value)
         self.publish_debug_image = bool(self.get_parameter("gesture.publish_debug_image").value)
+        self.agent_enabled = bool(self.get_parameter("agent.enabled").value)
 
         self.detector = YoloPersonDetector(
             model_path=str(self.get_parameter("yolo_model").value),
@@ -81,6 +86,24 @@ class PersonFollowerNode(Node):
             turn_angular_speed=float(self.get_parameter("gesture.turn_angular_speed").value),
             action_duration_sec=float(self.get_parameter("gesture.action_duration_sec").value),
         )
+        self.vision_agent = VisionAgent(
+            enabled=bool(self.get_parameter("vlm.enabled").value),
+            base_url=str(self.get_parameter("vlm.base_url").value),
+            model=str(self.get_parameter("vlm.model").value),
+            timeout_sec=float(self.get_parameter("vlm.timeout_sec").value),
+        )
+        self.planner_agent = PlannerAgent(
+            enabled=bool(self.get_parameter("llm.enabled").value),
+            base_url=str(self.get_parameter("llm.base_url").value),
+            model=str(self.get_parameter("llm.model").value),
+            timeout_sec=float(self.get_parameter("llm.timeout_sec").value),
+        )
+        self.robot_executor = RobotExecutor(
+            max_history=int(self.get_parameter("agent.max_history").value),
+            forward_speed=float(self.get_parameter("agent.forward_speed").value),
+            turn_speed=float(self.get_parameter("agent.turn_speed").value),
+            action_duration_sec=float(self.get_parameter("agent.action_duration_sec").value),
+        )
 
         self.latest_frame = None
         self.latest_annotated = None
@@ -95,6 +118,13 @@ class PersonFollowerNode(Node):
         self.latest_cmd = Twist()
         self.latest_safe_cmd = Twist()
         self.latest_action = "NONE"
+        self.latest_scene: Dict[str, object] = {}
+        self.latest_vision_description = ""
+        self.latest_agent_error = ""
+        self.user_request = ""
+        self.agent_job_running = False
+        self.last_agent_plan_time = 0.0
+        self.agent_lock = threading.Lock()
         self.last_image_time = 0.0
         self.last_target_time = 0.0
         self.frame_count = 0
@@ -107,7 +137,7 @@ class PersonFollowerNode(Node):
                 host=str(self.get_parameter("dashboard_host").value),
                 port=int(self.get_parameter("dashboard_port").value),
                 jpeg_quality=int(self.get_parameter("jpeg_quality").value),
-                command_callback=self.gesture_controller.handle_web_command,
+                command_callback=self.handle_dashboard_command,
             )
             self.dashboard.start()
             self.get_logger().info(
@@ -165,6 +195,20 @@ class PersonFollowerNode(Node):
             "control_modes.default_mode": "IDLE",
             "control_modes.follow_mode_enabled": True,
             "control_modes.emergency_stop_enabled": True,
+            "llm.enabled": False,
+            "llm.base_url": "http://127.0.0.1:8080/v1",
+            "llm.model": "qwen3",
+            "llm.timeout_sec": 8.0,
+            "vlm.enabled": False,
+            "vlm.base_url": "http://127.0.0.1:8080/v1",
+            "vlm.model": "qwen3-vl",
+            "vlm.timeout_sec": 8.0,
+            "agent.enabled": False,
+            "agent.max_history": 20,
+            "agent.planning_interval": 2.0,
+            "agent.forward_speed": 0.12,
+            "agent.turn_speed": 0.45,
+            "agent.action_duration_sec": 0.8,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -187,6 +231,21 @@ class PersonFollowerNode(Node):
     def _gesture_actions(self) -> Dict[str, str]:
         names = ["open_palm", "thumbs_up", "fist", "point_left", "point_right", "victory", "ok_sign"]
         return {name: str(self.get_parameter("gesture_actions.%s" % name).value) for name in names}
+
+    def handle_dashboard_command(self, command: str, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
+        """处理 Dashboard 按钮和 Agent 查询。"""
+        payload = payload or {}
+        if command == "AGENT_MODE":
+            self.gesture_controller.previous_mode = self.gesture_controller.mode
+            self.gesture_controller.mode = ControlMode.AGENT_MODE
+            return {"ok": True, "mode": self.gesture_controller.mode}
+        if command == "AGENT_QUERY":
+            self.user_request = str(payload.get("text", "")).strip()
+            self.gesture_controller.previous_mode = self.gesture_controller.mode
+            self.gesture_controller.mode = ControlMode.AGENT_MODE
+            self.last_agent_plan_time = 0.0
+            return {"ok": True, "mode": self.gesture_controller.mode, "query": self.user_request}
+        return self.gesture_controller.handle_web_command(command)
 
     def image_callback(self, msg: Image) -> None:
         try:
@@ -233,6 +292,8 @@ class PersonFollowerNode(Node):
                 if target is not None:
                     self.last_target_time = now
 
+            self._maybe_start_agent_job(frame, people, gestures, target)
+
             if self.publish_debug_image:
                 self.gesture_debug_pub.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
 
@@ -264,6 +325,79 @@ class PersonFollowerNode(Node):
             self.frame_count = 0
             self.last_fps_time = now
 
+    def _maybe_start_agent_job(
+        self,
+        frame,
+        people: List[PersonDetection],
+        gestures: List[GestureResult],
+        target: Optional[PersonDetection],
+    ) -> None:
+        """按固定间隔启动后台 Agent 推理，避免阻塞图像回调。"""
+        if not self.agent_enabled:
+            return
+        if self.gesture_controller.mode != ControlMode.AGENT_MODE:
+            return
+        now = now_sec()
+        interval = float(self.get_parameter("agent.planning_interval").value)
+        with self.agent_lock:
+            if self.agent_job_running or now - self.last_agent_plan_time < interval:
+                return
+            self.agent_job_running = True
+            self.last_agent_plan_time = now
+
+        frame_copy = frame.copy()
+        people_copy = list(people)
+        gestures_copy = list(gestures)
+        target_copy = target
+        thread = threading.Thread(
+            target=self._run_agent_job,
+            args=(frame_copy, people_copy, gestures_copy, target_copy),
+            name="vision-language-agent",
+            daemon=True,
+        )
+        thread.start()
+
+    def _run_agent_job(
+        self,
+        frame,
+        people: List[PersonDetection],
+        gestures: List[GestureResult],
+        target: Optional[PersonDetection],
+    ) -> None:
+        """后台调用 VLM 和 LLM，生成动作计划。"""
+        try:
+            height, width = frame.shape[:2]
+            vision = self.vision_agent.describe(frame)
+            scene = build_scene_summary(
+                people=people,
+                gestures=gestures,
+                target=target,
+                frame_width=width,
+                frame_height=height,
+                vision_description=vision.description,
+            )
+            robot_state = self._status_dict()
+            planner = self.planner_agent.plan(
+                scene=scene,
+                robot_state=robot_state,
+                mode=self.gesture_controller.mode,
+                user_request=self.user_request,
+            )
+            self.robot_executor.update_plan(planner.plan, planner.latency_ms, planner.tokens)
+            with self.lock:
+                self.latest_scene = scene
+                self.latest_vision_description = vision.description
+                self.latest_agent_error = vision.error or planner.error
+            if planner.plan.get("action") == "STOP":
+                self.publish_stop("agent stop: %s" % planner.plan.get("reason", ""))
+        except Exception as exc:
+            self.latest_agent_error = str(exc)
+            self.robot_executor.update_plan({"action": "STOP", "reason": "agent exception: %s" % exc, "speak": ""})
+            self.publish_stop("agent exception")
+        finally:
+            with self.agent_lock:
+                self.agent_job_running = False
+
     def control_loop(self) -> None:
         with self.lock:
             frame = self.latest_frame
@@ -293,6 +427,23 @@ class PersonFollowerNode(Node):
             safe_cmd, safety_reason = self.safety_guard.filter_cmd(override_cmd, True, image_age)
             self._publish_cmd(safe_cmd, override_cmd, "gesture action %s" % action_name, safety_reason)
             return
+
+        if mode == ControlMode.AGENT_MODE:
+            next_mode, agent_cmd, agent_reason = self.robot_executor.resolve(mode)
+            if next_mode == ControlMode.FOLLOW:
+                self.gesture_controller.mode = ControlMode.FOLLOW
+                mode = ControlMode.FOLLOW
+            elif next_mode in (ControlMode.IDLE, ControlMode.PATROL_READY):
+                self.gesture_controller.mode = next_mode
+                self.publish_stop("agent mode %s: %s" % (next_mode, agent_reason))
+                return
+            elif agent_cmd is not None:
+                safe_cmd, safety_reason = self.safety_guard.filter_cmd(agent_cmd, True, image_age)
+                self._publish_cmd(safe_cmd, agent_cmd, "agent action: %s" % agent_reason, safety_reason)
+                return
+            else:
+                self.publish_stop("agent waiting")
+                return
 
         if mode != ControlMode.FOLLOW:
             self.publish_stop("mode %s" % mode)
@@ -354,6 +505,18 @@ class PersonFollowerNode(Node):
             "target_distance_m": self.target_distance_m,
             "gesture": gesture_info,
             "gesture_logs": list(self.gesture_controller.logs),
+            "scene": self.latest_scene,
+            "agent": {
+                "enabled": self.agent_enabled,
+                "vision_description": self.latest_vision_description,
+                "last_plan": dict(self.robot_executor.last_plan),
+                "logs": list(self.robot_executor.logs),
+                "latency_ms": round(self.robot_executor.last_latency_ms, 1),
+                "tokens": dict(self.robot_executor.last_tokens),
+                "job_running": self.agent_job_running,
+                "error": self.latest_agent_error,
+                "user_request": self.user_request,
+            },
             "raw_cmd": twist_to_dict(self.latest_cmd),
             "safe_cmd": twist_to_dict(self.latest_safe_cmd),
             "control_reason": self.latest_reason,
