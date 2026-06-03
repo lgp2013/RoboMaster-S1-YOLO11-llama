@@ -1,5 +1,5 @@
 robomaster
-ultralytics
+ultralytics>=8.3.0,<8.4.0
 opencv-python
 requests
-numpy
+numpy<2
