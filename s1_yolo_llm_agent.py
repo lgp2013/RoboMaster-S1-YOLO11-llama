@@ -22,6 +22,8 @@ from config import (
     AUTO_MOVE_ENABLED,
     EMERGENCY_STOP,
     ENABLE_DASHBOARD,
+    ENABLE_GESTURE_DETECTION,
+    GESTURE_ACTION_ENABLED,
     FORWARD_COOLDOWN,
     LLM_BASE_URL,
     LLM_INTERVAL_SECONDS,
@@ -41,11 +43,14 @@ from config import (
     YOLO_MODEL,
 )
 from dashboard import DashboardRenderer
+from gesture_action_mapper import map_gesture_to_action
+from gesture_detector import GestureDetector, GestureResult
 
 SYSTEM_PROMPT = """
 你是 RoboMaster S1 机器人控制助手。
 你只能输出 JSON，不要输出 Markdown，不要解释。
 你只能根据 YOLO 检测结果给机器人一个动作建议，最终动作会由 Safety Guard 安全层判断。
+你会收到 detected_gesture 字段。手势也是建议来源，最终动作仍由 Safety Guard 判断。
 
 可选 action 只能是：
 
@@ -71,7 +76,9 @@ SYSTEM_PROMPT = """
 8. 优先 stop 或云台调整，不要连续 forward。
 9. 不要尝试撞击、冲撞或追逐目标。
 10. 摄像头和 YOLO 不能可靠判断墙面距离，如果不确定应该 stop。
-11. 只能返回 JSON，例如：
+11. 如果 detected_gesture 是 open_palm 或 fist，优先建议 stop。
+12. 如果 detected_gesture 是 point_left/right，优先建议 gimbal_left/right。
+13. 只能返回 JSON，例如：
    {"action":"gimbal_left","reason":"person is on the left side"}
 """
 
@@ -160,6 +167,7 @@ class SafetyGuard:
         self.last_forward_time = 0.0
         self.forward_start_time = 0.0
         self.is_forwarding = False
+        self.auto_move_enabled = AUTO_MOVE_ENABLED
 
     def stop_forward_tracking(self) -> None:
         self.is_forwarding = False
@@ -184,7 +192,7 @@ class SafetyGuard:
             self.stop_forward_tracking()
             return "stop", "LLM suggested stop"
 
-        if not AUTO_MOVE_ENABLED and raw_action in ("forward", "backward"):
+        if not self.auto_move_enabled and raw_action in ("forward", "backward"):
             self.stop_forward_tracking()
             return "stop", "AUTO_MOVE_ENABLED is False, forward/backward disabled"
 
@@ -239,18 +247,21 @@ class SafetyGuard:
         return raw_action, "Action approved by Safety Guard"
 
 
-def build_scene_text(scene: Dict[str, object]) -> Tuple[str, Dict[str, object]]:
+def build_scene_text(scene: Dict[str, object], detected_gesture: str = "none") -> Tuple[str, Dict[str, object]]:
     if not scene.get("has_person"):
         scene_text = """YOLO检测结果：
 
 * 没有检测到 person
+* detected_gesture: {gesture}
 请输出机器人动作 JSON。"""
+        scene_text = scene_text.format(gesture=detected_gesture)
         scene_info = {
             "has_person": False,
             "area_ratio": 0.0,
             "horizontal_position": "none",
             "vertical_position": "none",
             "distance": "none",
+            "detected_gesture": detected_gesture,
         }
         return scene_text, scene_info
 
@@ -262,6 +273,7 @@ def build_scene_text(scene: Dict[str, object]) -> Tuple[str, Dict[str, object]]:
 * 垂直位置: {scene["vertical"]}
 * 距离估计: {scene["distance"]}
 * 目标框面积占比: {float(scene["area_ratio"]):.3f}
+* detected_gesture: {detected_gesture}
 请输出机器人动作 JSON。"""
 
     scene_info = {
@@ -270,6 +282,7 @@ def build_scene_text(scene: Dict[str, object]) -> Tuple[str, Dict[str, object]]:
         "horizontal_position": scene["horizontal"],
         "vertical_position": scene["vertical"],
         "distance": scene["distance"],
+        "detected_gesture": detected_gesture,
     }
     return scene_text, scene_info
 
@@ -369,7 +382,7 @@ def execute_action(ep_robot: robot.Robot, action: str) -> None:
         gimbal.drive_speed(pitch_speed=0, yaw_speed=0)
 
 
-def draw_detection_overlay(frame, person_box: Optional[Box]) -> None:
+def draw_detection_overlay(frame, person_box: Optional[Box], gesture_result: GestureResult, gesture_detector=None) -> None:
     """Draw only essential YOLO target visuals on the video frame."""
     if person_box is not None:
         x1, y1, x2, y2, confidence = person_box
@@ -386,8 +399,11 @@ def draw_detection_overlay(frame, person_box: Optional[Box]) -> None:
             (0, 255, 0),
             2,
         )
+    if gesture_detector is not None:
+        gesture_detector.draw(frame, gesture_result)
 
-def build_detection_info(scene: Dict[str, object], fps: float) -> Dict[str, object]:
+
+def build_detection_info(scene: Dict[str, object], fps: float, gesture_result: GestureResult) -> Dict[str, object]:
     has_person = bool(scene.get("has_person"))
     return {
         "has_person": has_person,
@@ -397,6 +413,9 @@ def build_detection_info(scene: Dict[str, object], fps: float) -> Dict[str, obje
         "vertical_position": scene.get("vertical", "unknown") if has_person else "unknown",
         "distance": scene.get("distance", "unknown") if has_person else "unknown",
         "area_ratio": float(scene.get("area_ratio", 0.0) or 0.0),
+        "detected_gesture": gesture_result.gesture,
+        "gesture_confidence": gesture_result.confidence,
+        "handedness": gesture_result.handedness,
         "fps": fps,
     }
 
@@ -405,7 +424,7 @@ def build_safety_info(safety_guard: SafetyGuard, safe_action: str, safety_reason
     return {
         "safe_action": safe_action,
         "safety_reason": safety_reason,
-        "auto_move_enabled": AUTO_MOVE_ENABLED,
+        "auto_move_enabled": safety_guard.auto_move_enabled,
         "forward_cooldown_active": safety_guard.is_forward_cooldown_active(),
         "allow_turn_in_place": ALLOW_TURN_IN_PLACE,
     }
@@ -427,6 +446,7 @@ def main() -> int:
     last_llm_time = 0.0
     safety_guard = SafetyGuard()
     dashboard = DashboardRenderer()
+    gesture_detector = None
     dashboard.add_log("Program started")
     llm_decision: Dict[str, object] = {
         "action": "stop",
@@ -449,6 +469,9 @@ def main() -> int:
         print(f"Loading YOLO model: {YOLO_MODEL}")
         model = YOLO(YOLO_MODEL)
         dashboard.add_log("YOLO model loaded")
+        if ENABLE_GESTURE_DETECTION:
+            gesture_detector = GestureDetector()
+            dashboard.add_log("MediaPipe Hands loaded")
 
         print(f"Connecting RoboMaster S1: conn_type={ROBOT_CONN_TYPE}")
         ep_robot.initialize(conn_type=ROBOT_CONN_TYPE)
@@ -464,7 +487,7 @@ def main() -> int:
         execute_action(ep_robot, "stop")
 
         window_name = "RoboMaster S1 AI Control Dashboard"
-        print("Press q to quit. Press s for safe stop.")
+        print("Press q to quit. Press s for safe stop. Press m to toggle auto move. Press r to recenter gimbal.")
         while True:
             frame = camera.read_cv2_image(strategy="newest", timeout=5)
             if frame is None:
@@ -490,13 +513,27 @@ def main() -> int:
             )
             person_box = select_best_person(results)
             scene = classify_scene(person_box, width, height)
-            detection_info = build_detection_info(scene, current_fps)
+            if gesture_detector is not None:
+                gesture_result = gesture_detector.detect(frame)
+            else:
+                gesture_result = GestureResult()
+            detection_info = build_detection_info(scene, current_fps, gesture_result)
 
             now = time.time()
             if now - last_llm_time >= LLM_INTERVAL_SECONDS:
-                scene_text, scene_info = build_scene_text(scene)
+                scene_text, scene_info = build_scene_text(scene, gesture_result.gesture)
                 current_decision = ask_llm(scene_text)
-                raw_action = current_decision.get("action", "stop")
+                gesture_action, gesture_reason = map_gesture_to_action(gesture_result.gesture)
+                if GESTURE_ACTION_ENABLED and gesture_action is not None:
+                    raw_action = gesture_action
+                    current_decision = {
+                        **current_decision,
+                        "action": gesture_action,
+                        "reason": f"{gesture_reason}; llm_reason={current_decision.get('reason', '')}",
+                    }
+                    dashboard.add_log(f"gesture {gesture_result.gesture} -> {gesture_action}")
+                else:
+                    raw_action = current_decision.get("action", "stop")
                 safe_action, safety_reason = safety_guard.filter_action(str(raw_action), scene_info)
                 execute_action(ep_robot, safe_action)
                 llm_decision = current_decision
@@ -512,7 +549,7 @@ def main() -> int:
                 last_llm_time = now
 
             annotated = frame.copy()
-            draw_detection_overlay(annotated, person_box)
+            draw_detection_overlay(annotated, person_box, gesture_result, gesture_detector)
             safety_info = build_safety_info(safety_guard, safe_action, safety_reason)
             robot_status = build_robot_status(connection_state, camera_state, control_mode)
             dashboard_img = dashboard.render(
@@ -537,6 +574,14 @@ def main() -> int:
                 }
                 control_mode = "Safe Stop"
                 dashboard.add_log("Emergency safe stop triggered by user")
+            elif key == ord("m"):
+                safety_guard.auto_move_enabled = not safety_guard.auto_move_enabled
+                dashboard.add_log(f"AUTO_MOVE toggled to {safety_guard.auto_move_enabled}")
+                control_mode = "AI Assist" if safety_guard.auto_move_enabled else "AI Assist Safe"
+            elif key == ord("r"):
+                execute_action(ep_robot, "stop")
+                ep_robot.gimbal.recenter().wait_for_completed(timeout=3)
+                dashboard.add_log("Gimbal recentered by user")
             elif key == ord("q"):
                 dashboard.add_log("User pressed q, exiting")
                 break
@@ -561,6 +606,11 @@ def main() -> int:
                 camera.stop_video_stream()
             except Exception as exc:
                 print(f"[WARN] camera.stop_video_stream failed: {exc}")
+        if gesture_detector is not None:
+            try:
+                gesture_detector.close()
+            except Exception as exc:
+                print(f"[WARN] gesture detector close failed: {exc}")
         try:
             ep_robot.close()
         except Exception as exc:

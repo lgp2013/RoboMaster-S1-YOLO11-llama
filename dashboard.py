@@ -9,6 +9,16 @@ import cv2
 import numpy as np
 
 from config import (
+    DASHBOARD_COLOR_BG,
+    DASHBOARD_COLOR_BLUE,
+    DASHBOARD_COLOR_BORDER,
+    DASHBOARD_COLOR_GREEN,
+    DASHBOARD_COLOR_MUTED,
+    DASHBOARD_COLOR_PANEL,
+    DASHBOARD_COLOR_PANEL_DARK,
+    DASHBOARD_COLOR_RED,
+    DASHBOARD_COLOR_TEXT,
+    DASHBOARD_COLOR_YELLOW,
     DASHBOARD_HEIGHT,
     DASHBOARD_WIDTH,
     ENABLE_DASHBOARD,
@@ -21,16 +31,16 @@ from config import (
 )
 
 
-COLOR_BG = (18, 24, 31)
-COLOR_PANEL = (28, 38, 49)
-COLOR_PANEL_DARK = (16, 23, 31)
-COLOR_TEXT = (235, 242, 248)
-COLOR_MUTED = (166, 181, 194)
-COLOR_GREEN = (80, 210, 130)
-COLOR_YELLOW = (0, 210, 255)
-COLOR_RED = (70, 90, 240)
-COLOR_BLUE = (230, 150, 70)
-COLOR_BORDER = (74, 95, 116)
+COLOR_BG = DASHBOARD_COLOR_BG
+COLOR_PANEL = DASHBOARD_COLOR_PANEL
+COLOR_PANEL_DARK = DASHBOARD_COLOR_PANEL_DARK
+COLOR_TEXT = DASHBOARD_COLOR_TEXT
+COLOR_MUTED = DASHBOARD_COLOR_MUTED
+COLOR_GREEN = DASHBOARD_COLOR_GREEN
+COLOR_YELLOW = DASHBOARD_COLOR_YELLOW
+COLOR_RED = DASHBOARD_COLOR_RED
+COLOR_BLUE = DASHBOARD_COLOR_BLUE
+COLOR_BORDER = DASHBOARD_COLOR_BORDER
 
 HEADER_X, HEADER_Y = 0, 0
 HEADER_W, HEADER_H = DASHBOARD_WIDTH, 50
@@ -87,7 +97,7 @@ class DashboardRenderer:
         self._put_text(canvas, title, 20, 33, scale=0.8, thickness=2)
         self._put_text(canvas, f"Mode: {mode}", 570, 32, color=COLOR_MUTED)
         self._put_text(canvas, now, 760, 32, color=COLOR_MUTED)
-        self._put_text(canvas, "q: quit  s: safe stop", 1040, 32, color=COLOR_YELLOW)
+        self._put_text(canvas, "q quit | s stop | m auto | r recenter", 990, 32, scale=0.5, color=COLOR_YELLOW)
 
     def _draw_video_panel(self, canvas, frame, detection_info: Dict[str, object]) -> None:
         self._draw_panel(canvas, VIDEO_X, VIDEO_Y, VIDEO_PANEL_WIDTH, VIDEO_PANEL_HEIGHT, "Camera + YOLO")
@@ -150,7 +160,10 @@ class DashboardRenderer:
             canvas,
             "Detection Status",
             [
-                ("Target", detection_info.get("target", "none")),
+                (
+                    "Target",
+                    f"{detection_info.get('target', 'none')} / {detection_info.get('detected_gesture', 'none')}",
+                ),
                 ("Confidence", f"{float(detection_info.get('confidence', 0.0) or 0.0):.2f}"),
                 ("Position", detection_info.get("horizontal_position", "unknown")),
                 ("Vertical", detection_info.get("vertical_position", "unknown")),
@@ -279,3 +292,50 @@ class DashboardRenderer:
         new_w = max(1, int(w * scale))
         new_h = max(1, int(h * scale))
         return cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+
+if __name__ == "__main__":
+    renderer = DashboardRenderer()
+    renderer.add_log("Dashboard smoke demo started")
+    demo_frame = np.full((480, 640, 3), (35, 45, 55), dtype=np.uint8)
+    cv2.rectangle(demo_frame, (230, 90), (410, 390), (0, 255, 0), 2)
+    cv2.circle(demo_frame, (320, 240), 5, (0, 255, 255), -1)
+    cv2.putText(demo_frame, "person 0.88", (230, 82), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+    image = renderer.render(
+        frame=demo_frame,
+        detection_info={
+            "has_person": True,
+            "target": "person",
+            "confidence": 0.88,
+            "horizontal_position": "center",
+            "vertical_position": "middle",
+            "distance": "medium",
+            "area_ratio": 0.12,
+            "detected_gesture": "open_palm",
+            "fps": 24.0,
+        },
+        llm_decision={
+            "action": "forward",
+            "reason": "person is far but this is only a suggestion",
+            "last_llm_time": "N/A",
+            "llm_error": "none",
+            "usage": None,
+        },
+        safety_info={
+            "safe_action": "stop",
+            "safety_reason": "AUTO_MOVE_ENABLED is False",
+            "auto_move_enabled": False,
+            "forward_cooldown_active": False,
+            "allow_turn_in_place": True,
+        },
+        robot_status={
+            "connection": "disconnected",
+            "conn_type": "sta",
+            "camera": "stopped",
+            "control_mode": "Smoke Demo",
+            "emergency_stop": False,
+        },
+    )
+    cv2.imshow("RoboMaster S1 AI Control Dashboard", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()

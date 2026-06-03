@@ -63,7 +63,7 @@ cd D:\codex\dji-s1\RoboMaster-S1-YOLO11-llama-demo
 ..\.venv\Scripts\python.exe .\s1_yolo_gimbal_follow.py
 ```
 
-运行完整 LLM Agent：
+运行完整手势 + LLM Dashboard Agent：
 
 ```powershell
 ..\.venv\Scripts\python.exe .\s1_yolo_llm_agent.py
@@ -174,7 +174,7 @@ python s1_yolo_gimbal_follow.py
 - 没有 person 时云台停止；
 - 按 `q` 退出。
 
-## 测试 4：完整 LLM Agent
+## 测试 4：完整手势 + LLM Dashboard Agent
 
 ```powershell
 python s1_yolo_llm_agent.py
@@ -183,14 +183,22 @@ python s1_yolo_llm_agent.py
 工作流程：
 
 1. 读取 S1 摄像头画面；
-2. YOLO11 检测 person；
-3. 构造结构化 `scene_text`；
-4. 每隔 `LLM_INTERVAL_SECONDS` 秒请求 llama.cpp；
-5. 解析模型返回 JSON；
-6. `SafetyGuard` 根据安全规则过滤 LLM 建议；
-7. 执行过滤后的安全白名单动作；
-8. 在画面上显示 `raw_action`、`safe_action` 和 `safety_reason`；
-9. 按 `q` 退出。
+2. YOLO11 检测 `person`；
+3. MediaPipe Hands 检测手部关键点和标准手势；
+4. 构造包含 `detected_gesture` 的结构化 `scene_text`；
+5. 每隔 `LLM_INTERVAL_SECONDS` 秒请求 llama.cpp；
+6. 解析模型返回 JSON；
+7. 手势映射和 LLM 建议都必须经过 `SafetyGuard`；
+8. 执行过滤后的安全白名单动作；
+9. Dashboard 显示视频、YOLO 框、手势关键点、LLM 决策和安全状态；
+10. 按 `q` 退出。
+
+手势映射默认保守：
+
+- `open_palm` / `fist`：建议 `stop`；
+- `point_left` / `point_right`：建议云台向左/向右；
+- `peace` / `thumbs_up` / `thumbs_down`：建议云台上/下调整；
+- 默认不把手势直接映射到底盘前进或后退。
 
 ### Safety Guard 避障与防撞说明
 
@@ -247,6 +255,8 @@ python s1_yolo_llm_agent.py
 
 - 按 `q`：安全退出 Dashboard，停止底盘和云台，并释放摄像头与机器人连接。
 - 按 `s`：立即发送 `stop`，用于临时急停或在调试时打断当前动作；窗口保持运行，方便继续观察状态。
+- 按 `m`：运行时切换 `AUTO_MOVE_ENABLED`。
+- 按 `r`：云台回中。
 
 Dashboard 仍遵守 `config.py` 中的安全配置。默认 `AUTO_MOVE_ENABLED = False`，因此 LLM 即使返回 `forward` 或 `backward`，也会被 `SafetyGuard` 过滤为 `stop`。需要自动前进时必须显式改为 `AUTO_MOVE_ENABLED=True`，并先架空底盘或在开阔区域低速测试。
 
@@ -411,6 +421,8 @@ RoboMaster-S1-YOLO11-llama-demo/
 ├── test_s1_camera_yolo.py
 ├── s1_yolo_gimbal_follow.py
 ├── s1_yolo_llm_agent.py
+├── gesture_detector.py
+├── gesture_action_mapper.py
 ├── dashboard.py
 ├── s1_web_debug.py
 ├── media_locked_people/       # 运行时保存锁定人物截图，默认不提交 Git
