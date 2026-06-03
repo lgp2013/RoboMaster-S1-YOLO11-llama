@@ -51,6 +51,8 @@ const i18n = {
     saveSettings: "SAVE SETTINGS",
     settingsSaved: "Settings applied at runtime.",
     settingsFailed: "Settings update failed",
+    vehicleDetails: "VEHICLE DETAILS",
+    connection: "Connection",
     agentPlaceholder: "Task: What do you see? / Find the cup / Follow me",
     linked: "linked",
     lost: "lost",
@@ -117,6 +119,8 @@ const i18n = {
     saveSettings: "保存设置",
     settingsSaved: "设置已在运行时生效。",
     settingsFailed: "设置更新失败",
+    vehicleDetails: "车辆详情",
+    connection: "连接状态",
     agentPlaceholder: "任务：你看到了什么？ / 帮我找水杯 / 跟着我",
     linked: "已连接",
     lost: "断开",
@@ -266,6 +270,10 @@ function renderStatus(data = {}) {
   setText("agentPlan", JSON.stringify(agent.last_plan || {}, null, 2));
   setText("agentLatency", `${agent.latency_ms || 0} ms`);
   setText("agentTokens", agent.tokens?.total_tokens ?? 0);
+
+  if (document.getElementById("robotDetailsModal")?.classList.contains("open")) {
+    renderRobotDetails(data);
+  }
 }
 
 function renderLogs(logs, force = false) {
@@ -331,6 +339,48 @@ function openSettings() {
 
 function closeSettings() {
   document.getElementById("settingsModal")?.classList.remove("open");
+}
+
+function openRobotDetails() {
+  document.getElementById("robotDetailsModal")?.classList.add("open");
+  renderRobotDetails(state.lastStatus || {});
+}
+
+function closeRobotDetails() {
+  document.getElementById("robotDetailsModal")?.classList.remove("open");
+}
+
+function renderRobotDetails(data = {}) {
+  const safe = data.safe_cmd || { linear_x: data.linear_x || 0, angular_z: data.angular_z || 0 };
+  const rawDetails = {
+    dashboard_version: data.dashboard_version,
+    robot_ip: data.robot_ip,
+    camera_topic: data.camera_topic,
+    cmd_vel_topic: data.cmd_vel_topic,
+    mode: data.mode,
+    battery: data.battery,
+    fps: data.fps,
+    camera_status: data.camera_status,
+    llm_status: data.llm_status,
+    control_reason: data.control_reason,
+    safety_reason: data.safety_reason,
+    last_image_age_sec: data.last_image_age_sec,
+    last_target_age_sec: data.last_target_age_sec,
+  };
+
+  setText("detailConnected", data.connected ? t("connected") : t("disconnected"));
+  setText("detailRobotIp", data.robot_ip || "--");
+  setText("detailBattery", data.battery == null ? "N/A" : `${data.battery}%`);
+  setText("detailMode", data.mode || "--");
+  setText("detailCameraTopic", data.camera_topic || "--");
+  setText("detailCmdVelTopic", data.cmd_vel_topic || "--");
+  setText("detailCameraStatus", localizeValue(data.camera_status || "unknown"));
+  setText("detailLlmStatus", localizeValue(data.llm_status || "standby"));
+  setText("detailFps", data.fps ?? "--");
+  setText("detailLinearX", Number(data.linear_x || safe.linear_x || 0).toFixed(2));
+  setText("detailAngularZ", Number(data.angular_z || safe.angular_z || 0).toFixed(2));
+  setText("detailTarget", data.target ? t("person") : localizeValue(data.target_name || "none"));
+  setText("robotDetailsRaw", JSON.stringify(rawDetails, null, 2));
 }
 
 async function loadSettings() {
@@ -434,6 +484,11 @@ function boot() {
   document.getElementById("settingsSave")?.addEventListener("click", saveSettings);
   document.getElementById("settingsModal")?.addEventListener("click", (event) => {
     if (event.target?.id === "settingsModal") closeSettings();
+  });
+  document.getElementById("rosDetailsToggle")?.addEventListener("click", openRobotDetails);
+  document.getElementById("robotDetailsClose")?.addEventListener("click", closeRobotDetails);
+  document.getElementById("robotDetailsModal")?.addEventListener("click", (event) => {
+    if (event.target?.id === "robotDetailsModal") closeRobotDetails();
   });
 
   applyLanguage();

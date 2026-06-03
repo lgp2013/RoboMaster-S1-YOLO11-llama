@@ -16,7 +16,7 @@
       <h1>RoboMaster S1 Tactical AI Console</h1>
     </div>
     <div class="top-status">
-      <div class="status-pill"><span class="lamp" id="rosLamp"></span><span>ROS</span><strong id="rosState">--</strong></div>
+      <button class="status-pill status-button" id="rosDetailsToggle" type="button"><span class="lamp" id="rosLamp"></span><span>ROS</span><strong id="rosState">--</strong></button>
       <div class="status-pill"><span class="lamp" id="llmLamp"></span><span>LLM</span><strong id="llmState">--</strong></div>
       <div class="status-pill"><span class="lamp" id="cameraLamp"></span><span>CAM</span><strong id="cameraState">--</strong></div>
       <button class="settings-toggle" id="settingsToggle" type="button" data-i18n="settings">SETTINGS</button>
@@ -138,6 +138,33 @@
       <div class="settings-actions">
         <button id="settingsReload" type="button" data-i18n="reload">RELOAD</button>
         <button id="settingsSave" type="button" data-i18n="saveSettings">SAVE SETTINGS</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="robotDetailsModal" aria-hidden="true">
+    <section class="robot-details-modal cut-panel" role="dialog" aria-modal="true">
+      <div class="panel-header">
+        <span data-i18n="vehicleDetails">VEHICLE DETAILS</span>
+        <button class="micro-button" id="robotDetailsClose" type="button" data-i18n="close">CLOSE</button>
+      </div>
+      <div class="robot-detail-grid">
+        <div class="detail-card"><span data-i18n="connection">Connection</span><strong id="detailConnected">--</strong></div>
+        <div class="detail-card"><span data-i18n="robotIp">Robot IP</span><strong id="detailRobotIp">--</strong></div>
+        <div class="detail-card"><span data-i18n="battery">BATTERY</span><strong id="detailBattery">--</strong></div>
+        <div class="detail-card"><span data-i18n="modeShort">MODE</span><strong id="detailMode">--</strong></div>
+        <div class="detail-card"><span>Camera Topic</span><strong id="detailCameraTopic">--</strong></div>
+        <div class="detail-card"><span>CmdVel Topic</span><strong id="detailCmdVelTopic">--</strong></div>
+        <div class="detail-card"><span>Camera</span><strong id="detailCameraStatus">--</strong></div>
+        <div class="detail-card"><span>LLM</span><strong id="detailLlmStatus">--</strong></div>
+        <div class="detail-card"><span>FPS</span><strong id="detailFps">--</strong></div>
+        <div class="detail-card"><span>Linear X</span><strong id="detailLinearX">--</strong></div>
+        <div class="detail-card"><span>Angular Z</span><strong id="detailAngularZ">--</strong></div>
+        <div class="detail-card"><span data-i18n="targetShort">TARGET</span><strong id="detailTarget">--</strong></div>
+      </div>
+      <div class="robot-detail-raw">
+        <h3 data-i18n="coreData">Core Data</h3>
+        <pre id="robotDetailsRaw">{}</pre>
       </div>
     </section>
   </div>

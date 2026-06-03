@@ -13,7 +13,7 @@ import cv2
 from flask import Flask, Response, jsonify, render_template, request
 
 
-DASHBOARD_VERSION = "tactical-i18n-20260604"
+DASHBOARD_VERSION = "tactical-vehicle-details-20260604"
 
 
 class DashboardServer:
