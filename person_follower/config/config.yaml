@@ -1,0 +1,39 @@
+person_follower:
+  ros__parameters:
+    # ROS topics from robomaster_ros.
+    camera_topic: "/camera/image_color"
+    cmd_vel_topic: "/cmd_vel"
+
+    # YOLO11 configuration.
+    yolo_model: "yolo11n.pt"
+    confidence_threshold: 0.45
+    imgsz: 640
+    person_class_id: 0
+
+    # Control configuration.
+    control_rate_hz: 15.0
+    center_threshold_px: 45
+    yaw_gain: 1.2
+    distance_gain: 0.8
+    max_linear_speed: 0.30
+    min_linear_speed: 0.06
+    max_angular_speed: 1.0
+    min_angular_speed: 0.10
+
+    # Distance is estimated from bbox height ratio, not real meters.
+    # target_distance_m is shown in the dashboard for operator reference.
+    target_distance_m: 1.5
+    target_bbox_height_ratio: 0.45
+    bbox_height_tolerance: 0.08
+
+    # Safety.
+    lost_target_timeout_sec: 0.8
+    command_timeout_sec: 0.5
+    enable_backward: true
+    enable_auto_move: true
+
+    # Flask dashboard.
+    dashboard_enabled: true
+    dashboard_host: "0.0.0.0"
+    dashboard_port: 8088
+    jpeg_quality: 80
