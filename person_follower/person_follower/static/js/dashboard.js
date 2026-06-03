@@ -139,6 +139,7 @@ function speedText(cmd) {
 
 async function sendControl(command, extra = {}) {
   try {
+    setText("agentState", command);
     const payload = { command, ...extra };
     const res = await fetch("/api/control", {
       method: "POST",

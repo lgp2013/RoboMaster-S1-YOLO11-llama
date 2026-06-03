@@ -133,6 +133,9 @@ class PersonFollowerNode(Node):
         self.agent_lock = threading.Lock()
         self.event_logs: Deque[Dict[str, object]] = deque(maxlen=20)
         self.battery_percent = None
+        self.manual_override_cmd: Optional[Twist] = None
+        self.manual_override_until = 0.0
+        self.manual_override_action = "NONE"
         self.last_image_time = 0.0
         self.last_target_time = 0.0
         self.frame_count = 0
@@ -259,11 +262,13 @@ class PersonFollowerNode(Node):
             self.log_event("dashboard query: %s" % (self.user_request or "(empty)"))
             return {"ok": True, "mode": self.gesture_controller.mode, "query": self.user_request, "event_logs": list(self.event_logs)}
         if command == "EMERGENCY_STOP":
+            self.clear_manual_override()
             self.gesture_controller.force_stop(source="web", gesture="button")
             self.publish_stop("dashboard %s" % command)
             self.log_event("dashboard: %s" % command)
             return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
         if command == "STOP":
+            self.clear_manual_override()
             self.gesture_controller.handle_web_command("PAUSE")
             self.publish_stop("dashboard STOP")
             self.log_event("dashboard: STOP")
@@ -279,9 +284,7 @@ class PersonFollowerNode(Node):
             result["event_logs"] = list(self.event_logs)
             return result
         if command in ("FORWARD", "BACKWARD", "TURN_LEFT", "TURN_RIGHT"):
-            self.robot_executor.update_plan({"action": command, "reason": "manual dashboard override", "speak": ""})
-            self.gesture_controller.previous_mode = self.gesture_controller.mode
-            self.gesture_controller.mode = ControlMode.AGENT_MODE
+            self.start_manual_override(command)
             self.log_event("dashboard manual motion: %s" % command)
             return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
         if command == "CLEAR_LOGS":
@@ -290,6 +293,29 @@ class PersonFollowerNode(Node):
             self.event_logs.clear()
             return {"ok": True, "message": "logs cleared", "event_logs": []}
         return self.gesture_controller.handle_web_command(command)
+
+    def start_manual_override(self, command: str) -> None:
+        """Web 手动接管：固定低速短动作，优先级高于 Agent/FOLLOW。"""
+        cmd = Twist()
+        linear = float(self.get_parameter("agent.forward_speed").value)
+        angular = float(self.get_parameter("agent.turn_speed").value)
+        if command == "FORWARD":
+            cmd.linear.x = abs(linear)
+        elif command == "BACKWARD":
+            cmd.linear.x = -abs(linear)
+        elif command == "TURN_LEFT":
+            cmd.angular.z = abs(angular)
+        elif command == "TURN_RIGHT":
+            cmd.angular.z = -abs(angular)
+        self.manual_override_cmd = cmd
+        self.manual_override_action = command
+        self.manual_override_until = time.time() + float(self.get_parameter("agent.action_duration_sec").value)
+
+    def clear_manual_override(self) -> None:
+        """停止并清除手动接管动作。"""
+        self.manual_override_cmd = None
+        self.manual_override_until = 0.0
+        self.manual_override_action = "NONE"
 
     def battery_callback(self, msg: BatteryState) -> None:
         """读取 /battery。robomaster_ros 通常发布 sensor_msgs/BatteryState。"""
@@ -475,6 +501,19 @@ class PersonFollowerNode(Node):
         if image_age > float(self.get_parameter("image_timeout_sec").value):
             self.publish_stop("image timeout")
             return
+
+        if self.manual_override_cmd is not None:
+            if time.time() <= self.manual_override_until:
+                safe_cmd, safety_reason = self.safety_guard.filter_cmd(self.manual_override_cmd, True, image_age)
+                self.latest_action = "MANUAL_%s" % self.manual_override_action
+                self._publish_cmd(
+                    safe_cmd,
+                    self.manual_override_cmd,
+                    "manual override %s" % self.manual_override_action,
+                    safety_reason,
+                )
+                return
+            self.clear_manual_override()
 
         override_cmd, action_name = self.gesture_controller.get_override_cmd()
         mode = self.gesture_controller.mode
