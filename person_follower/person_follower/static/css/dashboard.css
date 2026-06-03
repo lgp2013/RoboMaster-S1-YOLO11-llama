@@ -339,6 +339,20 @@ button.danger:hover {
   box-shadow: 0 0 28px rgba(242, 95, 76, 0.35);
 }
 
+.top-status .lang-toggle {
+  min-width: 62px;
+  height: 38px;
+  padding: 0 12px;
+  color: var(--amber);
+  border-color: rgba(217, 164, 65, 0.56);
+  background: linear-gradient(180deg, rgba(55, 43, 22, 0.92), rgba(16, 22, 17, 0.92));
+}
+
+.top-status .lang-toggle:hover {
+  border-color: var(--amber);
+  box-shadow: 0 0 24px rgba(217, 164, 65, 0.16);
+}
+
 .log-panel { grid-column: 2; grid-row: 2; }
 
 #eventLog {
