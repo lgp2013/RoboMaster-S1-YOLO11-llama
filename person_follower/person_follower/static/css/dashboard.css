@@ -355,6 +355,48 @@ button.danger:hover {
 
 .log-panel { grid-column: 2; grid-row: 2; }
 
+.log-header {
+  gap: 10px;
+}
+
+.log-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.micro-button {
+  min-width: 58px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--cyan);
+  border-color: rgba(120, 240, 228, 0.28);
+}
+
+.micro-button.active {
+  color: #07100d;
+  background: var(--amber);
+  border-color: var(--amber);
+}
+
+.log-copy-hint {
+  display: none;
+  position: absolute;
+  right: 14px;
+  top: 48px;
+  z-index: 3;
+  padding: 6px 10px;
+  color: var(--amber);
+  background: rgba(7, 16, 13, 0.92);
+  border: 1px solid rgba(217, 164, 65, 0.4);
+  font-size: 12px;
+}
+
+.log-copy-hint.show {
+  display: block;
+}
+
 #eventLog {
   height: calc(100% - 42px);
   margin: 0;

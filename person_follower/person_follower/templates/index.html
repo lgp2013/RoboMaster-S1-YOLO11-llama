@@ -95,7 +95,15 @@
     </section>
 
     <section class="log-panel cut-panel">
-      <div class="panel-header"><span data-i18n="eventLog">EVENT LOG</span><strong data-i18n="last20">LAST 20</strong></div>
+      <div class="panel-header log-header">
+        <span data-i18n="eventLog">EVENT LOG</span>
+        <div class="log-tools">
+          <button class="micro-button" id="logLockToggle" type="button" data-i18n="lockLogs">LOCK</button>
+          <button class="micro-button" id="copyLogs" type="button" data-i18n="copyLogs">COPY</button>
+          <strong data-i18n="last20">LAST 20</strong>
+        </div>
+      </div>
+      <div class="log-copy-hint" id="logCopyHint">--</div>
       <ul id="eventLog"></ul>
     </section>
   </main>

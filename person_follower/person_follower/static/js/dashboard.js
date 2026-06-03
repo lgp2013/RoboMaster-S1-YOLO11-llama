@@ -27,6 +27,11 @@ const i18n = {
     clearLogs: "CLEAR LOGS",
     eventLog: "EVENT LOG",
     last20: "LAST 20",
+    lockLogs: "LOCK",
+    unlockLogs: "LIVE",
+    copyLogs: "COPY",
+    copied: "Copied",
+    copyFailed: "Copy failed",
     agentPlaceholder: "Task: What do you see? / Find the cup / Follow me",
     linked: "linked",
     lost: "lost",
@@ -69,6 +74,11 @@ const i18n = {
     clearLogs: "清空日志",
     eventLog: "事件日志",
     last20: "最近 20 条",
+    lockLogs: "锁定",
+    unlockLogs: "实时",
+    copyLogs: "复制",
+    copied: "已复制",
+    copyFailed: "复制失败",
     agentPlaceholder: "任务：你看到了什么？ / 帮我找水杯 / 跟着我",
     linked: "已连接",
     lost: "断开",
@@ -88,6 +98,8 @@ const i18n = {
 const state = {
   lastStatus: {},
   lang: localStorage.getItem("dashboardLanguage") || "en",
+  logsLocked: false,
+  latestLogs: [],
 };
 
 function t(key) {
@@ -115,7 +127,9 @@ function applyLanguage() {
     el.placeholder = t(el.dataset.i18nPlaceholder);
   });
   setText("langToggle", t("langButton"));
+  setText("logLockToggle", state.logsLocked ? t("unlockLogs") : t("lockLogs"));
   renderStatus(state.lastStatus);
+  renderLogs(state.latestLogs, true);
 }
 
 function toggleLanguage() {
@@ -149,6 +163,7 @@ async function sendControl(command, extra = {}) {
     const data = await res.json();
     if (!data.ok) console.warn("control failed", data);
     await refreshStatus();
+    await refreshLogs(true);
   } catch (err) {
     console.error("control request failed", err);
   }
@@ -166,13 +181,14 @@ async function refreshStatus() {
   }
 }
 
-async function refreshLogs() {
+async function refreshLogs(force = false) {
+  if (state.logsLocked && !force) return;
   try {
     const res = await fetch("/api/logs");
     const data = await res.json();
-    renderLogs(data.logs || []);
+    renderLogs(data.logs || [], force);
   } catch (err) {
-    renderLogs([{ message: `log feed offline: ${err}` }]);
+    renderLogs([{ message: `log feed offline: ${err}` }], force);
   }
 }
 
@@ -214,14 +230,68 @@ function renderStatus(data = {}) {
   setText("agentTokens", agent.tokens?.total_tokens ?? 0);
 }
 
-function renderLogs(logs) {
+function renderLogs(logs, force = false) {
   const el = document.getElementById("eventLog");
   if (!el) return;
-  el.innerHTML = logs.slice(0, 20).map((item) => {
+  if (state.logsLocked && !force) return;
+  state.latestLogs = logs.slice(0, 20);
+  el.innerHTML = state.latestLogs.map((item) => {
     const msg = item.message || item.reason || item.command || item.action || JSON.stringify(item);
     const time = item.time || item.timestamp || "";
-    return `<li><strong>${String(time).slice(0, 19)}</strong> ${msg}</li>`;
+    return `<li><strong>${String(time).slice(0, 19)}</strong> ${escapeHtml(String(msg))}</li>`;
   }).join("");
+}
+
+function escapeHtml(text) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatLogsForCopy() {
+  return state.latestLogs.map((item) => {
+    const msg = item.message || item.reason || item.command || item.action || JSON.stringify(item);
+    const time = item.time || item.timestamp || "";
+    return `${String(time).slice(0, 19)} ${msg}`;
+  }).join("\n");
+}
+
+async function copyLogs() {
+  const text = formatLogsForCopy();
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const area = document.createElement("textarea");
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    showLogHint(t("copied"));
+  } catch (err) {
+    showLogHint(`${t("copyFailed")}: ${err}`);
+  }
+}
+
+function showLogHint(text) {
+  const hint = document.getElementById("logCopyHint");
+  if (!hint) return;
+  hint.textContent = text;
+  hint.classList.add("show");
+  setTimeout(() => hint.classList.remove("show"), 1600);
+}
+
+function toggleLogLock(forceValue = null) {
+  state.logsLocked = forceValue === null ? !state.logsLocked : Boolean(forceValue);
+  const button = document.getElementById("logLockToggle");
+  button?.classList.toggle("active", state.logsLocked);
+  setText("logLockToggle", state.logsLocked ? t("unlockLogs") : t("lockLogs"));
+  if (!state.logsLocked) refreshLogs(true);
 }
 
 function boot() {
@@ -237,15 +307,18 @@ function boot() {
     });
   });
   document.getElementById("langToggle")?.addEventListener("click", toggleLanguage);
+  document.getElementById("logLockToggle")?.addEventListener("click", () => toggleLogLock());
+  document.getElementById("copyLogs")?.addEventListener("click", copyLogs);
+  document.getElementById("eventLog")?.addEventListener("mouseenter", () => toggleLogLock(true));
 
   applyLanguage();
   setInterval(() => {
     setText("clock", new Date().toLocaleTimeString());
     refreshStatus();
   }, 500);
-  setInterval(refreshLogs, 1000);
+  setInterval(() => refreshLogs(false), 1000);
   refreshStatus();
-  refreshLogs();
+  refreshLogs(true);
 }
 
 document.addEventListener("DOMContentLoaded", boot);
