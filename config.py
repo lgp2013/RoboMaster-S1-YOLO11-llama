@@ -18,3 +18,15 @@ SAFE_GIMBAL_YAW_SPEED = 40
 SAFE_GIMBAL_PITCH_SPEED = 25
 
 PERSON_CLASS_ID = 0
+
+# Web target-lock demo settings.
+LOCKED_PERSON_DIR = "media_locked_people"
+TARGET_FOLLOW_CONTROL_INTERVAL_SECONDS = 0.2
+TARGET_CENTER_DEADZONE_X = 45
+TARGET_CENTER_DEADZONE_Y = 40
+
+# Area-ratio thresholds are camera based approximations for roughly keeping
+# a person in a comfortable 1-2 meter band. Tune them in the web page logs for
+# your room, lens angle, and person size.
+TARGET_FAR_AREA_RATIO = 0.055
+TARGET_NEAR_AREA_RATIO = 0.18

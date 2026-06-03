@@ -22,11 +22,11 @@
       justify-content: space-between;
       gap: 16px;
     }
-    h1 { font-size: 20px; margin: 0; font-weight: 650; }
+    h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: 0; }
     main {
       padding: 20px;
       display: grid;
-      grid-template-columns: minmax(480px, 2fr) minmax(320px, 1fr);
+      grid-template-columns: minmax(480px, 2fr) minmax(360px, 1fr);
       gap: 18px;
     }
     section {
@@ -35,6 +35,7 @@
       border-radius: 8px;
       overflow: hidden;
     }
+    section + section { margin-top: 18px; }
     section h2 {
       margin: 0;
       padding: 12px 14px;
@@ -42,6 +43,7 @@
       font-weight: 650;
       border-bottom: 1px solid #263544;
       background: #142131;
+      letter-spacing: 0;
     }
     .video-wrap {
       aspect-ratio: 16 / 9;
@@ -66,31 +68,33 @@
       background: #1b2d3f;
       color: #f3f8fc;
       border-radius: 6px;
-      min-width: 78px;
+      min-width: 82px;
       min-height: 38px;
       padding: 8px 12px;
       font-size: 14px;
       cursor: pointer;
+      white-space: nowrap;
     }
     button:hover { background: #25445f; }
     button:active { transform: translateY(1px); }
     button.danger { border-color: #744044; background: #3a2024; }
     button.primary { border-color: #3c6c8d; background: #1d4c6c; }
+    button.warning { border-color: #806a34; background: #40341a; }
     .gimbal-grid {
       display: grid;
-      grid-template-columns: repeat(3, 78px);
+      grid-template-columns: repeat(3, 82px);
       grid-template-rows: repeat(3, 42px);
       gap: 8px;
       justify-content: center;
       margin-top: 14px;
     }
-    .gimbal-grid button { min-width: 0; width: 78px; height: 42px; padding: 0; }
+    .gimbal-grid button { min-width: 0; width: 82px; height: 42px; padding: 0; }
     .up { grid-column: 2; grid-row: 1; }
     .left { grid-column: 1; grid-row: 2; }
     .stop { grid-column: 2; grid-row: 2; }
     .right { grid-column: 3; grid-row: 2; }
     .down { grid-column: 2; grid-row: 3; }
-    .recenter { grid-column: 1 / 4; grid-row: 4; width: 250px !important; }
+    .recenter { grid-column: 1 / 4; grid-row: 4; width: 262px !important; }
     pre, .status-line {
       background: #091018;
       border: 1px solid #223140;
@@ -110,8 +114,22 @@
       border-bottom: 1px solid #243442;
       padding: 8px 6px;
       text-align: left;
+      vertical-align: top;
     }
     th { color: #a9bdce; font-weight: 600; }
+    .hint { color: #9eb4c8; font-size: 13px; line-height: 1.55; margin-top: 10px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 4px;
+      padding: 2px 8px;
+      border: 1px solid #34485a;
+      background: #132333;
+      font-size: 13px;
+    }
+    .tag.on { border-color: #3f7d5d; background: #193728; color: #bdf2cf; }
+    .tag.off { border-color: #6a3a42; background: #321b22; color: #ffd0d5; }
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; padding: 12px; }
       header { align-items: flex-start; flex-direction: column; }
@@ -137,6 +155,22 @@
 
     <div>
       <section>
+        <h2>人物锁定与跟随</h2>
+        <div class="panel-body">
+          <div class="toolbar">
+            <button class="primary" onclick="lockPerson(true)">锁定并跟随</button>
+            <button onclick="setAutoFollow(true)">继续跟随</button>
+            <button class="warning" onclick="setAutoFollow(false)">暂停跟随</button>
+            <button class="danger" onclick="unlockPerson()">解锁停止</button>
+          </div>
+          <div class="hint">
+            锁定时会保存当前画面和人物裁剪图。自动跟随只使用低速底盘前后移动和云台微调，用目标框面积近似保持 1-2 米距离。
+          </div>
+          <pre id="target">等待锁定目标</pre>
+        </div>
+      </section>
+
+      <section>
         <h2>云台控制</h2>
         <div class="panel-body">
           <div class="gimbal-grid">
@@ -150,14 +184,14 @@
         </div>
       </section>
 
-      <section style="margin-top:18px;">
+      <section>
         <h2>状态</h2>
         <div class="panel-body">
           <div id="status" class="status-line">等待启动</div>
         </div>
       </section>
 
-      <section style="margin-top:18px;">
+      <section>
         <h2>识别结果</h2>
         <div class="panel-body">
           <table>
@@ -167,6 +201,7 @@
                 <th>置信度</th>
                 <th>中心点</th>
                 <th>面积占比</th>
+                <th>目标分</th>
               </tr>
             </thead>
             <tbody id="detections"></tbody>
@@ -180,6 +215,7 @@
   <script>
     const video = document.getElementById("video");
     const statusBox = document.getElementById("status");
+    const targetBox = document.getElementById("target");
     const detectionsBody = document.getElementById("detections");
     const rawBox = document.getElementById("raw");
 
@@ -225,19 +261,62 @@
       }
     }
 
+    async function lockPerson(enableFollow) {
+      try {
+        await postJson("/api/lock_person", {enable_follow: enableFollow});
+        await refreshStatus();
+      } catch (err) {
+        statusBox.textContent = "锁定失败: " + err.message;
+      }
+    }
+
+    async function unlockPerson() {
+      try {
+        await postJson("/api/unlock_person");
+        await refreshStatus();
+      } catch (err) {
+        statusBox.textContent = "解锁失败: " + err.message;
+      }
+    }
+
+    async function setAutoFollow(enabled) {
+      try {
+        await postJson("/api/auto_follow", {enabled});
+        await refreshStatus();
+      } catch (err) {
+        statusBox.textContent = "跟随状态切换失败: " + err.message;
+      }
+    }
+
     function renderDetections(items) {
       detectionsBody.innerHTML = "";
       for (const item of items) {
         const tr = document.createElement("tr");
+        const mark = item.is_locked_target ? " <span class=\"tag on\">locked</span>" : "";
         tr.innerHTML = `
-          <td>${item.class_name}</td>
+          <td>${item.class_name}${mark}</td>
           <td>${item.confidence}</td>
           <td>${item.center}</td>
           <td>${item.area_ratio}</td>
+          <td>${item.target_score}</td>
         `;
         detectionsBody.appendChild(tr);
       }
       rawBox.textContent = JSON.stringify(items, null, 2);
+    }
+
+    function renderTarget(target, targetDetection) {
+      const locked = target && target.locked;
+      const follow = target && target.auto_follow;
+      const lockedTag = locked ? "已锁定" : "未锁定";
+      const followTag = follow ? "跟随中" : "未跟随";
+      targetBox.textContent =
+        `${lockedTag} / ${followTag}\n` +
+        `locked_at=${target.locked_at || ""}\n` +
+        `match_score=${target.last_match_score}\n` +
+        `last_seen_age_seconds=${target.last_seen_age_seconds}\n` +
+        `crop_path=${target.crop_path || ""}\n` +
+        `target_detection=${JSON.stringify(targetDetection || null, null, 2)}`;
     }
 
     async function refreshStatus() {
@@ -249,6 +328,7 @@
           `robot=${s.robot_connected} video=${s.video_running} yolo=${s.yolo_loaded}\n` +
           `last_action=${s.last_action}\n` +
           `last_error=${s.last_error || ""}`;
+        renderTarget(data.target || {}, data.target_detection);
         renderDetections(data.detections || []);
       } catch (err) {
         statusBox.textContent = "状态刷新失败: " + err.message;

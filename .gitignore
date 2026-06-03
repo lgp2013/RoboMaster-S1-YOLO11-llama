@@ -20,6 +20,8 @@ __pycache__/
 *.wav
 *.mp4
 *.avi
+runs/
+media_locked_people/
 
 # IDE/editor metadata.
 .idea/
