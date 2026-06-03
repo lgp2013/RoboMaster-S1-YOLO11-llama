@@ -164,7 +164,7 @@
             <button class="danger" onclick="unlockPerson()">解锁停止</button>
           </div>
           <div class="hint">
-            锁定时会保存当前画面和人物裁剪图。自动跟随只使用低速底盘前后移动和云台微调，用目标框面积近似保持 1-2 米距离。
+            锁定时会保存当前画面和人物裁剪图。自动跟随仍采用低速安全策略：只使用低速底盘前后移动和柔和云台微调，用目标框面积近似保持 1-2 米距离。
           </div>
           <pre id="target">等待锁定目标</pre>
         </div>
@@ -174,12 +174,15 @@
         <h2>云台控制</h2>
         <div class="panel-body">
           <div class="gimbal-grid">
-            <button class="up" onmousedown="gimbal('up')" onmouseup="gimbal('stop')" onclick="gimbal('up')">上</button>
-            <button class="left" onmousedown="gimbal('left')" onmouseup="gimbal('stop')" onclick="gimbal('left')">左</button>
+            <button class="up" onpointerdown="pressGimbal(event, 'up')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">上</button>
+            <button class="left" onpointerdown="pressGimbal(event, 'left')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">左</button>
             <button class="stop danger" onclick="gimbal('stop')">停</button>
-            <button class="right" onmousedown="gimbal('right')" onmouseup="gimbal('stop')" onclick="gimbal('right')">右</button>
-            <button class="down" onmousedown="gimbal('down')" onmouseup="gimbal('stop')" onclick="gimbal('down')">下</button>
+            <button class="right" onpointerdown="pressGimbal(event, 'right')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">右</button>
+            <button class="down" onpointerdown="pressGimbal(event, 'down')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">下</button>
             <button class="recenter" onclick="gimbal('recenter')">云台回中</button>
+          </div>
+          <div class="hint">
+            手动云台按钮已降低到更柔和的半速控制，适合近距离调试；需要快速避让时请优先点击停止或释放连接。
           </div>
         </div>
       </section>
@@ -259,6 +262,17 @@
       } catch (err) {
         statusBox.textContent = "云台控制失败: " + err.message;
       }
+    }
+
+    function pressGimbal(event, direction) {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      gimbal(direction);
+    }
+
+    function releaseGimbal(event) {
+      event.preventDefault();
+      gimbal("stop");
     }
 
     async function lockPerson(enableFollow) {
