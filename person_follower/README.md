@@ -184,13 +184,13 @@ Llama Server 和 Qwen3-VL 均使用 OpenAI 兼容接口：
 ```yaml
 llm:
   enabled: true
-  base_url: "http://127.0.0.1:8080/v1"
-  model: "qwen3"
+  base_url: "http://10.10.10.156:8080/v1"
+  model: "Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf"
   timeout_sec: 8.0
 
 vlm:
   enabled: true
-  base_url: "http://127.0.0.1:8080/v1"
+  base_url: "http://10.10.10.156:8080/v1"
   model: "qwen3-vl"
   timeout_sec: 8.0
 
@@ -212,13 +212,13 @@ agent:
 如果你的服务地址是：
 
 ```text
-http://127.0.0.1:8080/v1
+http://10.10.10.156:8080/v1
 ```
 
 最终请求地址就是：
 
 ```text
-http://127.0.0.1:8080/v1/chat/completions
+http://10.10.10.156:8080/v1/chat/completions
 ```
 
 ## 状态机
@@ -392,7 +392,7 @@ python3 -m pip install mediapipe==0.10.11
 检查 Llama Server：
 
 ```bash
-curl http://127.0.0.1:8080/v1/models
+curl http://10.10.10.156:8080/v1/models
 ```
 
 确认 `config.yaml` 里的 `base_url` 和 `model` 名称正确。

@@ -63,14 +63,14 @@ person_follower:
     # OpenAI-compatible Llama Server for text planning.
     llm:
       enabled: true
-      base_url: "http://127.0.0.1:8080/v1"
-      model: "qwen3"
+      base_url: "http://10.10.10.156:8080/v1"
+      model: "Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf"
       timeout_sec: 8.0
 
     # OpenAI-compatible vision-language model, for example Qwen3-VL.
     vlm:
       enabled: true
-      base_url: "http://127.0.0.1:8080/v1"
+      base_url: "http://10.10.10.156:8080/v1"
       model: "qwen3-vl"
       timeout_sec: 8.0
 
