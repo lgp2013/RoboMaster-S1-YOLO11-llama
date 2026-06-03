@@ -37,6 +37,7 @@ from config import (
     ROBOT_CONN_TYPE,
     SAFE_BACKWARD_SPEED,
     SAFE_FORWARD_SPEED,
+    SAFE_TURN_SPEED,
     SAFE_GIMBAL_PITCH_SPEED,
     SAFE_GIMBAL_YAW_SPEED,
     TARGET_CENTER_DEADZONE_X,
@@ -557,6 +558,8 @@ class WebDebugHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, **get_status_payload()})
         elif path == "/api/gimbal":
             self.handle_gimbal()
+        elif path == "/api/chassis":
+            self.handle_chassis()
         elif path == "/api/lock_person":
             self.handle_lock_person()
         elif path == "/api/unlock_person":
@@ -623,20 +626,56 @@ class WebDebugHandler(BaseHTTPRequestHandler):
             elif direction == "down":
                 gimbal.drive_speed(pitch_speed=-SAFE_GIMBAL_PITCH_SPEED, yaw_speed=0)
             elif direction == "stop":
-                safe_robot_stop()
+                safe_gimbal_stop()
             elif direction == "recenter":
-                safe_robot_stop()
+                safe_gimbal_stop()
                 gimbal.recenter().wait_for_completed(timeout=3)
             else:
-                safe_robot_stop()
+                safe_gimbal_stop()
                 self.send_json({"ok": False, "error": f"unknown direction: {direction}"}, code=400)
                 return
 
             with state_lock:
+                if bool(target_state["auto_follow"]):
+                    target_state["auto_follow"] = False
                 status["last_action"] = f"gimbal_{direction}"
             self.send_json({"ok": True, "direction": direction, **get_status_payload()})
         except Exception as exc:
-            safe_robot_stop()
+            safe_gimbal_stop()
+            set_error(str(exc))
+            self.send_json({"ok": False, "error": str(exc), **get_status_payload()}, code=500)
+
+    def handle_chassis(self) -> None:
+        if chassis is None:
+            self.send_json({"ok": False, "error": "robot is not started"}, code=400)
+            return
+
+        try:
+            payload = self.read_json()
+            direction = str(payload.get("direction", ""))
+
+            if direction == "forward":
+                chassis.drive_speed(x=SAFE_FORWARD_SPEED, y=0, z=0)
+            elif direction == "backward":
+                chassis.drive_speed(x=SAFE_BACKWARD_SPEED, y=0, z=0)
+            elif direction == "left":
+                chassis.drive_speed(x=0, y=0, z=-SAFE_TURN_SPEED)
+            elif direction == "right":
+                chassis.drive_speed(x=0, y=0, z=SAFE_TURN_SPEED)
+            elif direction == "stop":
+                safe_chassis_stop()
+            else:
+                safe_chassis_stop()
+                self.send_json({"ok": False, "error": f"unknown direction: {direction}"}, code=400)
+                return
+
+            with state_lock:
+                if bool(target_state["auto_follow"]):
+                    target_state["auto_follow"] = False
+                status["last_action"] = f"chassis_{direction}"
+            self.send_json({"ok": True, "direction": direction, **get_status_payload()})
+        except Exception as exc:
+            safe_chassis_stop()
             set_error(str(exc))
             self.send_json({"ok": False, "error": str(exc), **get_status_payload()}, code=500)
 

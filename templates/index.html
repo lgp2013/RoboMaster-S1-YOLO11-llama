@@ -26,7 +26,7 @@
     main {
       padding: 20px;
       display: grid;
-      grid-template-columns: minmax(480px, 2fr) minmax(360px, 1fr);
+      grid-template-columns: minmax(480px, 2fr) minmax(560px, 1fr);
       gap: 18px;
     }
     section {
@@ -80,15 +80,30 @@
     button.danger { border-color: #744044; background: #3a2024; }
     button.primary { border-color: #3c6c8d; background: #1d4c6c; }
     button.warning { border-color: #806a34; background: #40341a; }
-    .gimbal-grid {
+    .manual-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(262px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+    .control-pad {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+    }
+    .control-title {
+      color: #c7d7e5;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    .control-grid {
       display: grid;
       grid-template-columns: repeat(3, 82px);
       grid-template-rows: repeat(3, 42px);
       gap: 8px;
       justify-content: center;
-      margin-top: 14px;
     }
-    .gimbal-grid button { min-width: 0; width: 82px; height: 42px; padding: 0; }
+    .control-grid button { min-width: 0; width: 82px; height: 42px; padding: 0; }
     .up { grid-column: 2; grid-row: 1; }
     .left { grid-column: 1; grid-row: 2; }
     .stop { grid-column: 2; grid-row: 2; }
@@ -130,9 +145,10 @@
     }
     .tag.on { border-color: #3f7d5d; background: #193728; color: #bdf2cf; }
     .tag.off { border-color: #6a3a42; background: #321b22; color: #ffd0d5; }
-    @media (max-width: 900px) {
+    @media (max-width: 1120px) {
       main { grid-template-columns: 1fr; padding: 12px; }
       header { align-items: flex-start; flex-direction: column; }
+      .manual-controls { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -171,18 +187,33 @@
       </section>
 
       <section>
-        <h2>云台控制</h2>
+        <h2>手柄控制</h2>
         <div class="panel-body">
-          <div class="gimbal-grid">
-            <button class="up" onpointerdown="pressGimbal(event, 'up')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">上</button>
-            <button class="left" onpointerdown="pressGimbal(event, 'left')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">左</button>
-            <button class="stop danger" onclick="gimbal('stop')">停</button>
-            <button class="right" onpointerdown="pressGimbal(event, 'right')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">右</button>
-            <button class="down" onpointerdown="pressGimbal(event, 'down')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">下</button>
-            <button class="recenter" onclick="gimbal('recenter')">云台回中</button>
+          <div class="manual-controls">
+            <div class="control-pad">
+              <div class="control-title">底盘控制</div>
+              <div class="control-grid">
+                <button class="up" onpointerdown="pressChassis(event, 'forward')" onpointerup="releaseChassis(event)" onpointercancel="releaseChassis(event)" onpointerleave="releaseChassis(event)">前</button>
+                <button class="left" onpointerdown="pressChassis(event, 'left')" onpointerup="releaseChassis(event)" onpointercancel="releaseChassis(event)" onpointerleave="releaseChassis(event)">左</button>
+                <button class="stop danger" onclick="chassis('stop')">停</button>
+                <button class="right" onpointerdown="pressChassis(event, 'right')" onpointerup="releaseChassis(event)" onpointercancel="releaseChassis(event)" onpointerleave="releaseChassis(event)">右</button>
+                <button class="down" onpointerdown="pressChassis(event, 'backward')" onpointerup="releaseChassis(event)" onpointercancel="releaseChassis(event)" onpointerleave="releaseChassis(event)">后</button>
+              </div>
+            </div>
+            <div class="control-pad">
+              <div class="control-title">云台控制</div>
+              <div class="control-grid">
+                <button class="up" onpointerdown="pressGimbal(event, 'up')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">上</button>
+                <button class="left" onpointerdown="pressGimbal(event, 'left')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">左</button>
+                <button class="stop danger" onclick="gimbal('stop')">停</button>
+                <button class="right" onpointerdown="pressGimbal(event, 'right')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">右</button>
+                <button class="down" onpointerdown="pressGimbal(event, 'down')" onpointerup="releaseGimbal(event)" onpointercancel="releaseGimbal(event)" onpointerleave="releaseGimbal(event)">下</button>
+                <button class="recenter" onclick="gimbal('recenter')">云台回中</button>
+              </div>
+            </div>
           </div>
           <div class="hint">
-            手动云台按钮已降低到更柔和的半速控制，适合近距离调试；需要快速避让时请优先点击停止或释放连接。
+            左侧方向键控制底盘低速前进、后退和原地转向；右侧方向键控制云台。松开方向键会自动停止对应模块，手动底盘控制会暂停自动跟随。
           </div>
         </div>
       </section>
@@ -262,6 +293,26 @@
       } catch (err) {
         statusBox.textContent = "云台控制失败: " + err.message;
       }
+    }
+
+    async function chassis(direction) {
+      try {
+        await postJson("/api/chassis", {direction});
+        await refreshStatus();
+      } catch (err) {
+        statusBox.textContent = "底盘控制失败: " + err.message;
+      }
+    }
+
+    function pressChassis(event, direction) {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      chassis(direction);
+    }
+
+    function releaseChassis(event) {
+      event.preventDefault();
+      chassis("stop");
     }
 
     function pressGimbal(event, direction) {
