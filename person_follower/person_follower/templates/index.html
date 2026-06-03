@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RoboMaster S1 Tactical AI Console</title>
-  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <meta name="dashboard-version" content="{{ dashboard_version }}">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v={{ dashboard_version }}">
 </head>
 <body>
   <div class="noise"></div>
@@ -99,6 +100,6 @@
     </section>
   </main>
 
-  <script src="/static/js/dashboard.js"></script>
+  <script src="/static/js/dashboard.js?v={{ dashboard_version }}"></script>
 </body>
 </html>

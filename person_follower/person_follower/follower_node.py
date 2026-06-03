@@ -22,7 +22,7 @@ from .safety import SafetyGuard
 from .scene_understanding import build_scene_summary
 from .utils import json_string_msg, now_sec, twist_to_dict
 from .vision_agent import VisionAgent
-from .web_dashboard import DashboardServer
+from .web_dashboard import DASHBOARD_VERSION, DashboardServer
 from .yolo_detector import PersonDetection, YoloPersonDetector
 
 
@@ -558,6 +558,7 @@ class PersonFollowerNode(Node):
         }
         return {
             "connected": (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False,
+            "dashboard_version": DASHBOARD_VERSION,
             "battery": self.battery_percent,
             "gesture_name": gesture_info["current"],
             "target_name": "person" if target is not None else "none",

@@ -13,6 +13,9 @@ import cv2
 from flask import Flask, Response, jsonify, render_template, request
 
 
+DASHBOARD_VERSION = "tactical-i18n-20260604"
+
+
 class DashboardServer:
     """线程安全的 Flask Dashboard 服务。"""
 
@@ -37,12 +40,30 @@ class DashboardServer:
             template_folder=os.path.join(package_dir, "templates"),
             static_folder=os.path.join(package_dir, "static"),
         )
+        self.version_info = {
+            "version": DASHBOARD_VERSION,
+            "template_dir": os.path.join(package_dir, "templates"),
+            "static_dir": os.path.join(package_dir, "static"),
+            "theme": "tactical-robotics-command-center",
+        }
         self._setup_routes()
 
     def _setup_routes(self) -> None:
+        @self.app.after_request
+        def no_cache(response):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            response.headers["X-Dashboard-Version"] = DASHBOARD_VERSION
+            return response
+
         @self.app.route("/")
         def index():
-            return render_template("index.html")
+            return render_template("index.html", dashboard_version=DASHBOARD_VERSION)
+
+        @self.app.route("/api/dashboard/version")
+        def api_dashboard_version():
+            return jsonify(dict(self.version_info))
 
         @self.app.route("/api/status")
         def api_status():
