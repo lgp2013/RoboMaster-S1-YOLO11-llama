@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RoboMaster S1 Tactical AI Console</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="scanline"></div>
+  <header class="topbar">
+    <div class="brand-block">
+      <div class="brand-kicker">TACTICAL ROBOTICS COMMAND CENTER</div>
+      <h1>RoboMaster S1 Tactical AI Console</h1>
+    </div>
+    <div class="top-status">
+      <div class="status-pill"><span class="lamp" id="rosLamp"></span><span>ROS</span><strong id="rosState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="llmLamp"></span><span>LLM</span><strong id="llmState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="cameraLamp"></span><span>CAM</span><strong id="cameraState">--</strong></div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <main class="console-shell">
+    <section class="video-panel cut-panel">
+      <div class="panel-header">
+        <span>LIVE OPTICAL FEED</span>
+        <strong id="videoBadge">STANDBY</strong>
+      </div>
+      <div class="video-frame">
+        <img src="/video_feed" alt="RoboMaster camera feed">
+        <div class="hud-grid"></div>
+        <div class="crosshair"></div>
+        <div class="lock-reticle"><i></i><i></i><i></i><i></i></div>
+        <div class="hud-top-left">
+          <div>MODE <strong id="hudMode">--</strong></div>
+          <div>FPS <strong id="hudFps">--</strong></div>
+          <div>GESTURE <strong id="hudGesture">--</strong></div>
+        </div>
+        <div class="hud-bottom-right">
+          <div>TARGET <strong id="hudTarget">--</strong></div>
+          <div>VECTOR <strong id="hudVector">x=0 z=0</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="right-stack">
+      <section class="cut-panel status-panel">
+        <div class="panel-header"><span>ROBOT TELEMETRY</span><strong id="connectedBadge">--</strong></div>
+        <div class="metric-grid">
+          <div class="metric"><span>BATTERY</span><strong id="battery">--</strong></div>
+          <div class="metric"><span>MODE</span><strong id="mode">--</strong></div>
+          <div class="metric"><span>LINEAR X</span><strong id="linearX">--</strong></div>
+          <div class="metric"><span>ANGULAR Z</span><strong id="angularZ">--</strong></div>
+          <div class="metric"><span>TARGET</span><strong id="target">--</strong></div>
+          <div class="metric"><span>GESTURE</span><strong id="gesture">--</strong></div>
+        </div>
+      </section>
+
+      <section class="cut-panel agent-panel">
+        <div class="panel-header"><span>AGENT INTEL</span><strong id="agentState">--</strong></div>
+        <div class="agent-readout">
+          <label>Scene Understanding</label>
+          <p id="sceneText">--</p>
+          <label>Action Plan</label>
+          <pre id="agentPlan">{}</pre>
+          <div class="agent-mini">
+            <span>Latency <strong id="agentLatency">--</strong></span>
+            <span>Tokens <strong id="agentTokens">--</strong></span>
+          </div>
+        </div>
+        <div class="agent-query">
+          <input id="agentQuery" placeholder="任务：你看到了什么？ / 帮我找水杯 / 跟着我">
+          <button data-command="AGENT_QUERY">SEND</button>
+        </div>
+      </section>
+    </aside>
+
+    <section class="control-panel cut-panel">
+      <div class="panel-header"><span>MANUAL OVERRIDE</span><strong>LOW SPEED</strong></div>
+      <div class="control-grid">
+        <button class="danger" data-command="EMERGENCY_STOP">EMERGENCY STOP</button>
+        <button data-command="START_FOLLOW">START FOLLOW</button>
+        <button data-command="PAUSE_FOLLOW">PAUSE FOLLOW</button>
+        <button data-command="FORWARD">FORWARD</button>
+        <button data-command="TURN_LEFT">TURN LEFT</button>
+        <button data-command="STOP">STOP</button>
+        <button data-command="TURN_RIGHT">TURN RIGHT</button>
+        <button data-command="BACKWARD">BACKWARD</button>
+        <button data-command="CLEAR_LOGS">CLEAR LOGS</button>
+      </div>
+    </section>
+
+    <section class="log-panel cut-panel">
+      <div class="panel-header"><span>EVENT LOG</span><strong>LAST 20</strong></div>
+      <ul id="eventLog"></ul>
+    </section>
+  </main>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

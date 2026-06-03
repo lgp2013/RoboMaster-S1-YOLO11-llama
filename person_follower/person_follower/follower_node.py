@@ -1,15 +1,16 @@
 """ROS2 Foxy node for RoboMaster S1 YOLO person following and gesture control."""
 
+from collections import deque
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Deque, Dict, List, Optional
 
 import cv2
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import BatteryState, Image
 from std_msgs.msg import String
 
 from .follower_control import ControlConfig, PersonFollowerController
@@ -125,6 +126,8 @@ class PersonFollowerNode(Node):
         self.agent_job_running = False
         self.last_agent_plan_time = 0.0
         self.agent_lock = threading.Lock()
+        self.event_logs: Deque[Dict[str, object]] = deque(maxlen=20)
+        self.battery_percent = None
         self.last_image_time = 0.0
         self.last_target_time = 0.0
         self.frame_count = 0
@@ -147,6 +150,8 @@ class PersonFollowerNode(Node):
 
         self.get_logger().info("Person follower stage2 node started")
         self.get_logger().info("camera_topic=%s cmd_vel_topic=%s" % (self.camera_topic, self.cmd_vel_topic))
+        self.battery_sub = self.create_subscription(BatteryState, "/battery", self.battery_callback, 10)
+        self.log_event("system boot: tactical dashboard online")
 
     def _declare_parameters(self) -> None:
         defaults = {
@@ -235,17 +240,63 @@ class PersonFollowerNode(Node):
     def handle_dashboard_command(self, command: str, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
         """处理 Dashboard 按钮和 Agent 查询。"""
         payload = payload or {}
+        command = command.upper()
         if command == "AGENT_MODE":
             self.gesture_controller.previous_mode = self.gesture_controller.mode
             self.gesture_controller.mode = ControlMode.AGENT_MODE
-            return {"ok": True, "mode": self.gesture_controller.mode}
+            self.log_event("dashboard: enter AGENT_MODE")
+            return {"ok": True, "mode": self.gesture_controller.mode, "event_logs": list(self.event_logs)}
         if command == "AGENT_QUERY":
             self.user_request = str(payload.get("text", "")).strip()
             self.gesture_controller.previous_mode = self.gesture_controller.mode
             self.gesture_controller.mode = ControlMode.AGENT_MODE
             self.last_agent_plan_time = 0.0
-            return {"ok": True, "mode": self.gesture_controller.mode, "query": self.user_request}
+            self.log_event("dashboard query: %s" % (self.user_request or "(empty)"))
+            return {"ok": True, "mode": self.gesture_controller.mode, "query": self.user_request, "event_logs": list(self.event_logs)}
+        if command == "EMERGENCY_STOP":
+            self.gesture_controller.force_stop(source="web", gesture="button")
+            self.publish_stop("dashboard %s" % command)
+            self.log_event("dashboard: %s" % command)
+            return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
+        if command == "STOP":
+            self.gesture_controller.handle_web_command("PAUSE")
+            self.publish_stop("dashboard STOP")
+            self.log_event("dashboard: STOP")
+            return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
+        if command in ("PAUSE_FOLLOW", "PAUSE"):
+            result = self.gesture_controller.handle_web_command("PAUSE")
+            self.log_event("dashboard: PAUSE_FOLLOW")
+            result["event_logs"] = list(self.event_logs)
+            return result
+        if command == "START_FOLLOW":
+            result = self.gesture_controller.handle_web_command("START_FOLLOW")
+            self.log_event("dashboard: START_FOLLOW")
+            result["event_logs"] = list(self.event_logs)
+            return result
+        if command in ("FORWARD", "BACKWARD", "TURN_LEFT", "TURN_RIGHT"):
+            self.robot_executor.update_plan({"action": command, "reason": "manual dashboard override", "speak": ""})
+            self.gesture_controller.previous_mode = self.gesture_controller.mode
+            self.gesture_controller.mode = ControlMode.AGENT_MODE
+            self.log_event("dashboard manual motion: %s" % command)
+            return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
+        if command == "CLEAR_LOGS":
+            self.gesture_controller.handle_web_command("CLEAR_LOGS")
+            self.robot_executor.logs.clear()
+            self.event_logs.clear()
+            return {"ok": True, "message": "logs cleared", "event_logs": []}
         return self.gesture_controller.handle_web_command(command)
+
+    def battery_callback(self, msg: BatteryState) -> None:
+        """读取 /battery。robomaster_ros 通常发布 sensor_msgs/BatteryState。"""
+        try:
+            if msg.percentage >= 0.0:
+                self.battery_percent = int(round(float(msg.percentage) * 100.0))
+        except Exception:
+            self.battery_percent = None
+
+    def log_event(self, message: str) -> None:
+        """记录 Dashboard 最近事件，不参与 ROS 控制。"""
+        self.event_logs.appendleft({"time": time.strftime("%H:%M:%S"), "message": message})
 
     def image_callback(self, msg: Image) -> None:
         try:
@@ -272,9 +323,11 @@ class PersonFollowerNode(Node):
             if best is not None and best.gesture == "open_palm":
                 if self.gesture_controller.mode != ControlMode.EMERGENCY_STOP:
                     self.gesture_controller.force_stop(source="gesture_immediate", gesture="open_palm")
+                    self.log_event("gesture: open_palm immediate stop")
                 self.publish_stop("open_palm immediate stop")
             if triggered is not None:
                 self.gesture_controller.handle_stable_gesture(triggered)
+                self.log_event("stable gesture: %s" % triggered)
             self.gesture_controller.publish_state(gesture_state, best)
             self._draw_overlay(annotated, gesture_state)
             self._update_fps()
@@ -302,6 +355,7 @@ class PersonFollowerNode(Node):
 
         except Exception as exc:
             self.get_logger().error("image processing failed, stopping robot: %s" % exc)
+            self.log_event("image processing failed: %s" % exc)
             self.publish_stop("image processing exception")
 
     def _draw_overlay(self, frame, gesture_state: Dict[str, object]) -> None:
@@ -384,6 +438,7 @@ class PersonFollowerNode(Node):
                 user_request=self.user_request,
             )
             self.robot_executor.update_plan(planner.plan, planner.latency_ms, planner.tokens)
+            self.log_event("agent plan: %s - %s" % (planner.plan.get("action"), planner.plan.get("reason")))
             with self.lock:
                 self.latest_scene = scene
                 self.latest_vision_description = vision.description
@@ -393,6 +448,7 @@ class PersonFollowerNode(Node):
         except Exception as exc:
             self.latest_agent_error = str(exc)
             self.robot_executor.update_plan({"action": "STOP", "reason": "agent exception: %s" % exc, "speak": ""})
+            self.log_event("agent exception: %s" % exc)
             self.publish_stop("agent exception")
         finally:
             with self.agent_lock:
@@ -496,6 +552,14 @@ class PersonFollowerNode(Node):
             "cooldown_remaining": self.latest_gesture_state.get("cooldown_remaining", 0.0),
         }
         return {
+            "connected": (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False,
+            "battery": self.battery_percent,
+            "gesture_name": gesture_info["current"],
+            "target_name": "person" if target is not None else "none",
+            "linear_x": round(float(self.latest_safe_cmd.linear.x), 3),
+            "angular_z": round(float(self.latest_safe_cmd.angular.z), 3),
+            "llm_status": "online" if self.agent_enabled and not self.latest_agent_error else "standby",
+            "camera_status": "online" if (time.time() - self.last_image_time) < 2.0 else "offline",
             "fps": round(self.fps, 2),
             "mode": self.gesture_controller.mode,
             "camera_topic": self.camera_topic,
@@ -521,6 +585,7 @@ class PersonFollowerNode(Node):
             "safe_cmd": twist_to_dict(self.latest_safe_cmd),
             "control_reason": self.latest_reason,
             "safety_reason": self.latest_safety_reason,
+            "event_logs": list(self.event_logs),
             "last_image_age_sec": round(time.time() - self.last_image_time, 2) if self.last_image_time else None,
             "last_target_age_sec": round(time.time() - self.last_target_time, 2) if self.last_target_time else None,
         }

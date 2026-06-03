@@ -13,7 +13,15 @@ setup(
         ("share/" + package_name + "/config", ["config/config.yaml"]),
     ],
     install_requires=["setuptools"],
-    zip_safe=True,
+    include_package_data=True,
+    package_data={
+        package_name: [
+            "templates/*.html",
+            "static/css/*.css",
+            "static/js/*.js",
+        ]
+    },
+    zip_safe=False,
     maintainer="LGP",
     maintainer_email="lgp@example.com",
     description="RoboMaster S1 YOLO11 person follower with Flask dashboard.",
