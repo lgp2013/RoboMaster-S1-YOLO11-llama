@@ -323,7 +323,7 @@ def ask_llm(scene_text: str) -> Dict[str, object]:
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=8)
+        response = requests.post(url, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
         text = data["choices"][0]["message"]["content"]
