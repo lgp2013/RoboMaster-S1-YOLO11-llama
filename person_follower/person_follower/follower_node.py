@@ -602,6 +602,12 @@ class PersonFollowerNode(Node):
         latest_plan_action = str(latest_plan.get("action", "STOP"))
         gesture_state = dict(self.latest_gesture_state)
         gesture_output = gesture_state.get("stable_gesture", "none")
+        # 汇总每个子智能体的摘要输入/输出，供右侧卡片和详情弹窗共用。
+        now_text = time.strftime("%H:%M:%S")
+        latest_plan = dict(self.robot_executor.last_plan)
+        latest_plan_action = str(latest_plan.get("action", "STOP"))
+        gesture_state = dict(self.latest_gesture_state)
+        gesture_output = gesture_state.get("stable_gesture", "none")
         return {
             "ok": True,
             "success": True,
