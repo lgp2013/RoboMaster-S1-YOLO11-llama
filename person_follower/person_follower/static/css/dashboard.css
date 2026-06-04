@@ -172,15 +172,15 @@ h1 { margin: 0; font-size: 18px; letter-spacing: 0.08em; }
 .safety-mode-zone { grid-column: 1 / 2; }
 .safety-mode-grid { 
   display: grid; 
-  grid-template-columns: repeat(3, 1fr); 
+  grid-template-columns: repeat(4, 1fr); 
   gap: 8px;
   flex: 1;
 }
 .safety-mode-grid button {
-  min-height: 44px;
-  font-size: 13px;
+  min-height: 40px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 6px 8px;
+  padding: 5px 6px;
 }
 
 .cross-grid { 
