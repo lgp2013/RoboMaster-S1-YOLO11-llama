@@ -546,6 +546,51 @@ function renderSubAgentDetail(data) {
   return `<div class="detail-grid">${cards.join("")}</div>`;
 }
 
+// 详情页键名翻译映射
+const KEY_NAME_MAP = {
+  zh: {
+    "agent_status": "智能体状态",
+    "angular_z": "角速度Z",
+    "battery": "电池",
+    "camera_status": "摄像头状态",
+    "connection": "连接状态",
+    "control_source": "控制来源",
+    "current_command": "当前指令",
+    "gesture.candidate": "手势候选",
+    "gesture.candidate_count": "候选计数",
+    "gesture.confidence": "置信度",
+    "gesture.cooldown_remaining": "冷却剩余",
+    "gesture.current": "当前手势",
+    "gesture.stable_gesture": "稳定手势",
+    "gimbal_pitch": "云台俯仰",
+    "gimbal_yaw": "云台偏航",
+    "hand_status": "手势检测",
+    "last_command_time": "最后指令时间",
+    "linear_x": "线速度X",
+    "linear_y": "线速度Y",
+    "llm_status": "LLM状态",
+    "mode": "模式",
+    "model_name": "模型名称",
+    "target": "目标",
+    "yolo_status": "YOLO状态",
+    "raw_status_json.camera_status": "原始状态.摄像头",
+    "raw_status_json.connected": "原始状态.已连接",
+    "raw_status_json.current_command": "原始状态.当前指令",
+    "raw_status_json.current_control_source": "原始状态.控制来源",
+    "raw_status_json.follow_lock_message": "原始状态.锁定消息",
+    "raw_status_json.follow_lock_state": "原始状态.锁定状态",
+    "raw_status_json.recording": "原始状态.录制中",
+  },
+  en: {
+    // 英文保持原样
+  }
+};
+
+function translateKeyName(key) {
+  const lang = state.lang || "zh";
+  return KEY_NAME_MAP[lang]?.[key] || key;
+}
+
 function renderKeyValueDetail(data, prefix = "") {
   const items = [];
   
@@ -576,7 +621,7 @@ function renderKeyValueDetail(data, prefix = "") {
   
   const cards = items.map(({key, value}) => `
     <div class="detail-item">
-      <span>${escapeHtml(key)}</span>
+      <span>${escapeHtml(translateKeyName(key))}</span>
       <strong>${escapeHtml(value)}</strong>
     </div>
   `);
