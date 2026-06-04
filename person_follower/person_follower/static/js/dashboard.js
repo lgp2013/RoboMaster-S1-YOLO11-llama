@@ -285,27 +285,37 @@ function commandVectorText(cmd = {}) {
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
-  return response.json();
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || `HTTP ${response.status}`);
+  }
+  return payload;
 }
 
 async function sendControl(command, extra = {}) {
-  const payload = await fetchJson("/api/control", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ command, ...extra }),
-  });
-  const message = payload.message || payload.error || "no response";
-  const path = payload.path ? ` ${payload.path}` : "";
-  setText("commandStatusText", `${payload.command || command}: ${message}${path}`);
-  showHint(`${payload.command || command}: ${message}`);
-  if (payload.status) {
-    state.lastStatus = payload.status;
-    renderStatus(payload.status);
-  } else {
-    await refreshStatus();
-  }
-  if (state.currentDetailType) {
-    await refreshDetailModal();
+  try {
+    const payload = await fetchJson("/api/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command, ...extra }),
+    });
+    const message = payload.message || payload.error || "no response";
+    const path = payload.path ? ` ${payload.path}` : "";
+    setText("commandStatusText", `${payload.command || command}: ${message}${path}`);
+    showHint(`${payload.command || command}: ${message}`);
+    if (payload.status) {
+      state.lastStatus = payload.status;
+      renderStatus(payload.status);
+    } else {
+      await refreshStatus();
+    }
+    if (state.currentDetailType) {
+      await refreshDetailModal();
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setText("commandStatusText", `${command}: ${message}`);
+    showHint(`${command}: ${message}`);
   }
 }
 
@@ -749,8 +759,11 @@ async function saveSettings() {
 }
 
 function bindCommands() {
-  document.querySelectorAll("[data-command]").forEach((button) => {
-    button.addEventListener("click", () => sendControl(button.dataset.command));
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-command]");
+    if (!button) return;
+    event.preventDefault();
+    sendControl(button.dataset.command);
   });
 
   document.getElementById("videoFeed")?.addEventListener("click", (event) => {
@@ -764,7 +777,7 @@ function bindCommands() {
 function bindDetailTriggers() {
   document.querySelectorAll(".summary-card").forEach((card) => {
     card.addEventListener("click", (event) => {
-      if (event.target.closest("button")) return;
+      if (event.target.closest("button, a")) return;
       openDetailModal(card.dataset.detailType);
     });
   });
