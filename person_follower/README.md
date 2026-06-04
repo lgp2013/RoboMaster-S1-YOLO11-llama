@@ -1,125 +1,57 @@
-# RoboMaster S1 ROS2 YOLO11 + 手势 + Vision-Language-Agent
+# RoboMaster S1 ROS2 Dashboard Upgrade
 
-这是 RoboMaster S1 智能控制 Demo 的第三阶段工程，运行环境面向 Ubuntu 20.04 + ROS2 Foxy + `robomaster_ros`。
+This package extends the RoboMaster S1 ROS2 stack with:
 
-系统能力：
+- `FOLLOW_AGENT`: lock target first, then follow
+- `GESTURE_AGENT`: gesture recognition and mode switching
+- `VLM_AGENT`: scene understanding
+- `LLM_AGENT`: action planning
+- `SAFETY_AGENT`: command filtering, sleep, emergency stop
+- `MANUAL_AGENT`: manual chassis and gimbal override
+- `DASHBOARD_AGENT`: web control and detail APIs
 
-```text
-摄像头
-  -> YOLO11 人体检测
-  -> MediaPipe Hands 手势识别
-  -> Qwen3-VL 场景描述
-  -> Llama Server 行为规划
-  -> FSM 状态机
-  -> SafetyGuard 安全过滤
-  -> /cmd_vel 控制 RoboMaster S1
-```
+The dashboard is designed around fixed summary cards on the right side and a shared detail modal for all long text and JSON.
 
-重要原则：
-
-```text
-LLM/VLM 只给建议
-Action Plan 必须经过白名单和 SafetyGuard
-模型不能直接控制底盘速度
-```
-
-## 当前阶段
-
-第一阶段：
-
-- YOLO11 人体检测；
-- 最大 person 目标选择；
-- 人体跟随；
-- Web Dashboard。
-
-第二阶段：
-
-- MediaPipe Hands；
-- open_palm / thumbs_up / fist / point_left / point_right / victory / ok_sign；
-- IDLE / FOLLOW / GESTURE_CONTROL / PATROL_READY / EMERGENCY_STOP。
-
-第三阶段：
-
-- Qwen3-VL 视觉语言描述；
-- Llama Server 行为规划；
-- Agent 面板；
-- AGENT_MODE；
-- 支持自然语言任务输入；
-- 支持目标搜索、场景描述、跟随意图、危险停止。
-
-## 目录结构
+## Directory
 
 ```text
 person_follower/
-├── package.xml
-├── setup.py
-├── setup.cfg
-├── requirements.txt
-├── requirements-mediapipe-optional.txt
-├── README.md
-├── resource/
-│   └── person_follower
-├── launch/
-│   └── follower.launch.py
-├── config/
-│   └── config.yaml
-└── person_follower/
-    ├── __init__.py
-    ├── follower_node.py
-    ├── person_follower_node.py
-    ├── yolo_detector.py
-    ├── gesture_detector.py
-    ├── gesture_controller.py
-    ├── scene_understanding.py
-    ├── vision_agent.py
-    ├── planner_agent.py
-    ├── robot_executor.py
-    ├── web_dashboard.py
-    ├── flask_dashboard.py
-    ├── follower_control.py
-    ├── safety.py
-    ├── utils.py
-    ├── templates/
-    │   └── index.html
-    └── static/
-        ├── css/
-        │   └── dashboard.css
-        └── js/
-            └── dashboard.js
+|- README.md
+|- launch/
+|  |- follower.launch.py
+|- config/
+|  |- config.yaml
+|- person_follower/
+|  |- follower_node.py
+|  |- follower_control.py
+|  |- gesture_controller.py
+|  |- gesture_detector.py
+|  |- planner_agent.py
+|  |- robot_executor.py
+|  |- safety.py
+|  |- scene_understanding.py
+|  |- utils.py
+|  |- vision_agent.py
+|  |- web_dashboard.py
+|  |- yolo_detector.py
+|  |- static/
+|  |  |- css/dashboard.css
+|  |  |- js/dashboard.js
+|  |- templates/
+|     |- index.html
+|- records/
+   |- snapshots/
+   |- videos/
 ```
 
-`person_follower_node.py` 和 `flask_dashboard.py` 是兼容入口，新的主实现分别在 `follower_node.py` 和 `web_dashboard.py`。
+`records/` is created automatically when snapshots or video recording are used.
 
-## 环境说明
-
-已验证 ROS Topic：
-
-```text
-/camera/image_color
-/cmd_vel
-/odom
-/imu
-/battery
-```
-
-先确认 RoboMaster ROS 驱动正常：
-
-```bash
-ros2 run robomaster_ros discover
-ros2 launch robomaster_ros s1.launch conn_type:=sta
-ros2 topic hz /camera/image_color
-```
-
-## 安装依赖
-
-安装 ROS 依赖：
+## Install
 
 ```bash
 sudo apt update
 sudo apt install -y ros-foxy-cv-bridge python3-pip
 ```
-
-安装 Python 依赖：
 
 ```bash
 cd ~/rm_ws
@@ -127,31 +59,13 @@ python3 -m pip install --upgrade pip
 python3 -m pip install -r src/person_follower/requirements.txt
 ```
 
-国内网络慢可以使用清华源：
-
-```bash
-python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r src/person_follower/requirements.txt
-```
-
-如果你以 `root` 用户运行 ROS2，依赖也必须安装到 `root` 用户的 Python 环境。
-
-依赖检查：
-
-```bash
-python3 -c "from ultralytics import YOLO; print('ultralytics ok')"
-python3 -c "import requests; print('requests ok')"
-```
-
-说明：Ubuntu 20.04 + Python3.8 下，不同 pip 源对 `mediapipe` / `jaxlib` 的 wheel 支持不稳定，所以主 `requirements.txt` 不再强制安装 MediaPipe。未安装 MediaPipe 时，主节点仍可运行，手势识别会自动降级为禁用。
-
-如果你确认当前 Python 环境能安装 MediaPipe，再手动执行：
+Optional MediaPipe support:
 
 ```bash
 python3 -m pip install -r src/person_follower/requirements-mediapipe-optional.txt
-python3 -c "import mediapipe as mp; print(mp.__version__)"
 ```
 
-## 构建
+## Build
 
 ```bash
 cd ~/rm_ws
@@ -159,318 +73,301 @@ colcon build --packages-select person_follower
 source install/setup.bash
 ```
 
-## 启动
+## Exact Launch Commands
 
-先启动 RoboMaster ROS 驱动：
+1. Start the RoboMaster S1 ROS driver:
 
 ```bash
 ros2 launch robomaster_ros s1.launch conn_type:=sta
 ```
 
-再启动第三阶段程序：
+2. Start this package:
 
 ```bash
+cd ~/rm_ws
+source install/setup.bash
 ros2 launch person_follower follower.launch.py
 ```
 
-打开 Dashboard：
-
-```text
-http://<Ubuntu主机IP>:8088
-```
-
-本机访问：
+3. Open the dashboard:
 
 ```text
 http://127.0.0.1:8088
 ```
 
-## 模型服务配置
+For another machine on the LAN, replace `127.0.0.1` with the Ubuntu host IP.
 
-配置文件：
+## Dashboard Layout
 
-```text
-config/config.yaml
-```
+Left side:
 
-Llama Server 和 Qwen3-VL 均使用 OpenAI 兼容接口：
+- live video
+- HUD with `MODE`, `LOCK`, `TARGET`, `GESTURE`, `FPS`, velocity vector
+- click video to lock a person
 
-```yaml
-llm:
-  enabled: true
-  base_url: "http://10.10.10.156:8080/v1"
-  model: "Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf"
-  timeout_sec: 8.0
+Right side:
 
-vlm:
-  enabled: true
-  base_url: "http://10.10.10.156:8080/v1"
-  model: "qwen3-vl"
-  timeout_sec: 8.0
+- `Robot Telemetry`
+- `Agent Intelligence`
+- `Sub-Agent Status`
+- `Model Runtime`
+- `Event Log`
 
-agent:
-  enabled: true
-  max_history: 20
-  planning_interval: 2.0
-  forward_speed: 0.12
-  turn_speed: 0.45
-  action_duration_sec: 0.8
-```
+Each card shows only short summaries. Long text and JSON are opened in the shared detail modal.
 
-接口路径由代码拼接为：
+## Follow Lock State
 
-```text
-<base_url>/chat/completions
-```
+The follow lock state is restricted to:
 
-如果你的服务地址是：
+- `NONE`
+- `SCANNING`
+- `CANDIDATE`
+- `LOCKED`
+- `LOST`
 
-```text
-http://10.10.10.156:8080/v1
-```
+Rules:
 
-最终请求地址就是：
+- `START_FOLLOW` is disabled until a target is locked
+- click the video to lock a person manually
+- `AUTO LOCK` locks the best detected person
+- if the locked target is lost, the robot stops and an event is logged
 
-```text
-http://10.10.10.156:8080/v1/chat/completions
-```
+## Manual Override Zones
 
-## 状态机
+The manual control area is split into 4 zones:
 
-系统模式：
+1. Safety: `EMERGENCY_STOP`, `SLEEP`, `WAKE`
+2. Chassis: `FORWARD`, `BACKWARD`, `TURN_LEFT`, `TURN_RIGHT`, `STRAFE_LEFT`, `STRAFE_RIGHT`, `STOP`
+3. Gimbal: `GIMBAL_UP`, `GIMBAL_DOWN`, `GIMBAL_LEFT`, `GIMBAL_RIGHT`, `GIMBAL_CENTER`
+4. Mode and utility: `START_FOLLOW`, `PAUSE_FOLLOW`, `AGENT_MODE`, `GESTURE_MODE`, `IDLE`, `SNAPSHOT`, `START_RECORD`, `STOP_RECORD`, `CLEAR_LOGS`, `RESET_TARGET`, `RECONNECT_ROBOT`
 
-| 模式 | 说明 |
-| --- | --- |
-| IDLE | 静止，不跟随，不执行 Agent 动作 |
-| FOLLOW | 使用 YOLO11 人体跟随 |
-| GESTURE_CONTROL | 执行一次性手势动作 |
-| PATROL_READY | 巡逻预留模式 |
-| AGENT_MODE | Vision-Language-Agent 模式 |
-| EMERGENCY_STOP | 紧急停止，最高优先级 |
+## ROS2 Topics
 
-手势优先级高于 Agent。`open_palm` 任何时候都会立即 stop。
+- chassis: `/cmd_vel`
+- gimbal: `/cmd_gimbal`
+- mode: `/robot/mode`
+- control command: `/robot/command`
+- led bridge: `/robot/led_command`
+- gesture state: `/gesture/state`
+- gesture command: `/gesture/command`
 
-## Agent 动作白名单
+## HTTP APIs
 
-PlannerAgent 只能输出以下 action：
+Control API:
 
 ```text
-STOP
-FORWARD
-BACKWARD
-TURN_LEFT
-TURN_RIGHT
-FOLLOW_PERSON
-SEARCH_TARGET
-SPEAK
-PATROL
+POST /api/control
+Content-Type: application/json
 ```
 
-映射关系：
+Example success response:
 
-| Agent action | 执行方式 |
-| --- | --- |
-| STOP | 发布零速度，保持安全停止 |
-| FOLLOW_PERSON | 切换到 FOLLOW，复用 YOLO 人体跟随 |
-| SEARCH_TARGET | 原地低速扫描 |
-| TURN_LEFT | 原地左转短动作 |
-| TURN_RIGHT | 原地右转短动作 |
-| FORWARD | 短时低速前进 |
-| BACKWARD | 短时低速后退 |
-| SPEAK | 当前只记录到 Dashboard，不调用音频 |
-| PATROL | 进入 PATROL_READY，不做导航 |
+```json
+{
+  "success": true,
+  "command": "START_FOLLOW",
+  "message": "Follow started on locked target"
+}
+```
 
-## Dashboard 使用
+Supported control commands:
 
-页面包含：
+- `EMERGENCY_STOP`
+- `SLEEP`
+- `WAKE`
+- `FORWARD`
+- `BACKWARD`
+- `TURN_LEFT`
+- `TURN_RIGHT`
+- `STOP`
+- `STRAFE_LEFT`
+- `STRAFE_RIGHT`
+- `GIMBAL_UP`
+- `GIMBAL_DOWN`
+- `GIMBAL_LEFT`
+- `GIMBAL_RIGHT`
+- `GIMBAL_CENTER`
+- `START_FOLLOW`
+- `PAUSE_FOLLOW`
+- `AGENT_MODE`
+- `GESTURE_MODE`
+- `IDLE`
+- `LOCK_TARGET`
+- `RESET_TARGET`
+- `SNAPSHOT`
+- `START_RECORD`
+- `STOP_RECORD`
+- `CLEAR_LOGS`
+- `RECONNECT_ROBOT`
 
-- 实时视频；
-- YOLO 检测框；
-- MediaPipe 手部关键点；
-- 当前模式；
-- 当前手势；
-- 当前安全速度；
-- Agent 场景描述；
-- Agent 行动计划；
-- Agent 最近 20 条日志；
-- Token 使用量；
-- 模型响应时间；
-- 手动停止、启动跟随、暂停跟随、Agent 模式按钮；
-- 自然语言任务输入框。
-
-示例输入：
+Detail APIs:
 
 ```text
-你看到了什么？
-帮我找水杯
-跟着我
-停止
+GET /api/status
+GET /api/detail/telemetry
+GET /api/detail/agent
+GET /api/detail/logs
+GET /api/detail/models
+GET /api/detail/sub_agents
+POST /api/logs/clear
 ```
 
-## 典型能力
+Detail API response format:
 
-环境描述：
-
-```text
-用户输入：你看到了什么？
-VLM 输出：前方有一个人，旁边有一张椅子。
-Planner 输出：SPEAK 或 STOP
+```json
+{
+  "success": true,
+  "data": {},
+  "timestamp": 1710000000.123
+}
 ```
 
-目标搜索：
+## Exact API Commands
 
-```text
-用户输入：帮我找水杯
-Agent 输出：SEARCH_TARGET
-机器人：原地低速扫描，发现目标后 STOP
-```
-
-目标跟随：
-
-```text
-用户输入：跟着我
-Agent 输出：FOLLOW_PERSON
-机器人：进入 FOLLOW 模式
-```
-
-手势与语言混合控制：
-
-```text
-thumbs_up -> FOLLOW
-自然语言“停止” -> STOP
-open_palm -> 立即 stop
-```
-
-危险检测：
-
-```text
-识别到跌倒、障碍物、遮挡、目标丢失、模型超时 -> STOP
-```
-
-## ROS2 Topic
-
-Robot mode:
+Auto-lock the best detected person:
 
 ```bash
-ros2 topic echo /robot/mode
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"LOCK_TARGET"}'
 ```
 
-Robot command:
+Lock by clicking a point on the video:
 
 ```bash
-ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'SLEEP'}"
-ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'WAKE'}"
-ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'START_FOLLOW'}"
-ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'EMERGENCY_STOP'}"
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"LOCK_TARGET","x":0.52,"y":0.41}'
 ```
 
-SLEEP mode behavior:
-
-- publish zero velocity to `/cmd_vel`;
-- publish zero velocity to `/cmd_gimbal`;
-- block gesture-triggered actions;
-- pause Agent/VLM/LLM decision jobs;
-- publish `OFF` to `/robot/led_command` for an external LED bridge;
-- keep the robot still even when image, AI, or Dashboard errors happen.
-
-手势状态：
+Start follow:
 
 ```bash
-ros2 topic echo /gesture/state
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"START_FOLLOW"}'
 ```
 
-手势命令：
+Sleep:
 
 ```bash
-ros2 topic echo /gesture/command
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"SLEEP"}'
 ```
 
-可选调试图像：
-
-```yaml
-gesture:
-  publish_debug_image: true
-```
-
-开启后发布：
-
-```text
-/gesture/debug_image
-```
-
-## 安全注意事项
-
-- EMERGENCY_STOP 最高优先级。
-- 图像超过 1 秒未更新，机器人停止。
-- Agent 响应超时，机器人停止。
-- LLM/VLM 异常，机器人停止。
-- 目标丢失，机器人停止。
-- LLM 不能直接控制底盘速度。
-- Action Plan 必须经过白名单和 SafetyGuard。
-- YOLO11 和 VLM 都不是可靠避障传感器，普通 RGB 摄像头无法准确判断墙、桌子、柜子的距离。
-- 第一次运行请架空底盘，或放在开阔区域低速测试。
-
-## 常见问题
-
-### No module named 'ultralytics'
+Wake:
 
 ```bash
-cd ~/rm_ws
-python3 -m pip install -r src/person_follower/requirements.txt
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"WAKE"}'
 ```
 
-### No module named 'mediapipe'
+Take a snapshot:
 
 ```bash
-python3 -m pip install mediapipe==0.10.11
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"SNAPSHOT"}'
 ```
 
-### Agent 没有响应
-
-检查 Llama Server：
+Start recording:
 
 ```bash
-curl http://10.10.10.156:8080/v1/models
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"START_RECORD"}'
 ```
 
-确认 `config.yaml` 里的 `base_url` 和 `model` 名称正确。
-
-### Dashboard 打不开
+Stop recording:
 
 ```bash
-ss -lntp | grep 8088
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"STOP_RECORD"}'
 ```
 
-远程访问时确认防火墙允许 8088。
-
-### 机器人不动
+Fetch telemetry detail:
 
 ```bash
-ros2 topic hz /camera/image_color
-ros2 topic echo /cmd_vel
+curl http://127.0.0.1:8088/api/detail/telemetry
 ```
 
-如果 `/cmd_vel` 有输出但机器人不动，检查 `robomaster_ros` 是否正常连接 S1。
-
-## 推荐测试顺序
+Fetch sub-agent detail:
 
 ```bash
-ros2 run robomaster_ros discover
-ros2 launch robomaster_ros s1.launch conn_type:=sta
-ros2 topic hz /camera/image_color
-cd ~/rm_ws
-python3 -m pip install -r src/person_follower/requirements.txt
-colcon build --packages-select person_follower
-source install/setup.bash
-ros2 launch person_follower follower.launch.py
+curl http://127.0.0.1:8088/api/detail/sub_agents
 ```
 
-## 后续扩展方向
+Clear logs:
 
-第四阶段：SLAM
+```bash
+curl -X POST http://127.0.0.1:8088/api/logs/clear
+```
 
-第五阶段：Nav2
+## Validation
 
-第六阶段：自主巡逻
+1. Dashboard status:
 
-第七阶段：多机器人协同
+```bash
+curl http://127.0.0.1:8088/api/status
+```
+
+Check that the payload includes:
+
+- `follow_lock_state`
+- `follow_enabled`
+- `sub_agents`
+- `recording`
+- `safe_gimbal_cmd`
+- `details`
+
+2. Follow must require lock first:
+
+```bash
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"START_FOLLOW"}'
+```
+
+Expected failure:
+
+```json
+{
+  "success": false,
+  "command": "START_FOLLOW",
+  "error": "Lock a person first before following"
+}
+```
+
+3. Sleep blocks motion:
+
+```bash
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"SLEEP"}'
+```
+
+Then:
+
+```bash
+curl -X POST http://127.0.0.1:8088/api/control \
+  -H "Content-Type: application/json" \
+  -d '{"command":"FORWARD"}'
+```
+
+Expected result: the movement command is rejected while sleep mode is active.
+
+4. Snapshot and recording outputs:
+
+- snapshots are written under `records/snapshots/`
+- videos are written under `records/videos/`
+
+## Safety Notes
+
+- `EMERGENCY_STOP` has the highest priority
+- `SLEEP` blocks motion commands and agent motion output
+- `Ctrl+C` publishes zero chassis and gimbal velocity
+- target loss stops the robot immediately
+- all agent output passes through `SAFETY_AGENT` before publish

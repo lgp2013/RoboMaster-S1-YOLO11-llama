@@ -1,22 +1,26 @@
-const i18n = {
-  en: {
-    langButton: "中文",
+const I18N = {
+  zh: {
     appTitle: "RoboMaster Tactical AI Console",
-    liveFeed: "LIVE OPTICAL FEED",
+    liveFeed: "LIVE FEED",
     modeShort: "MODE",
     gestureShort: "GESTURE",
     targetShort: "TARGET",
     vectorShort: "VECTOR",
     robotTelemetry: "ROBOT TELEMETRY",
     battery: "BATTERY",
-    aiLoad: "AI LOAD",
-    modelState: "MODEL",
-    agentIntel: "AGENT INTEL",
-    sceneUnderstanding: "Scene Understanding",
-    actionPlan: "Action Plan",
-    latency: "Latency",
-    tokens: "Tokens",
-    send: "SEND",
+    agentIntel: "AGENT INTELLIGENCE",
+    actionPlan: "ACTION PLAN",
+    sceneUnderstanding: "SCENE",
+    eventLog: "EVENT LOG",
+    subAgents: "SUB-AGENT STATUS",
+    detail: "DETAIL",
+    settings: "SETTINGS",
+    settingsTitle: "SYSTEM SETTINGS",
+    close: "CLOSE",
+    refresh: "REFRESH",
+    copy: "COPY",
+    clear: "CLEAR",
+    saveSettings: "SAVE SETTINGS",
     manualOverride: "MANUAL OVERRIDE",
     lowSpeed: "LOW SPEED",
     emergencyStop: "EMERGENCY STOP",
@@ -25,21 +29,37 @@ const i18n = {
     startFollow: "START FOLLOW",
     pauseFollow: "PAUSE FOLLOW",
     forward: "FORWARD",
-    turnLeft: "TURN LEFT",
-    stop: "STOP",
-    turnRight: "TURN RIGHT",
     backward: "BACKWARD",
+    turnLeft: "TURN LEFT",
+    turnRight: "TURN RIGHT",
+    stop: "STOP",
+    strafeLeft: "STRAFE LEFT",
+    strafeRight: "STRAFE RIGHT",
+    gimbalUp: "GIMBAL UP",
+    gimbalDown: "GIMBAL DOWN",
+    gimbalLeft: "GIMBAL LEFT",
+    gimbalRight: "GIMBAL RIGHT",
+    gimbalCenter: "GIMBAL CENTER",
+    agentMode: "AGENT MODE",
+    gestureMode: "GESTURE MODE",
+    idleMode: "IDLE",
+    autoLock: "AUTO LOCK",
+    snapshot: "SNAPSHOT",
+    startRecord: "START RECORD",
+    stopRecord: "STOP RECORD",
     clearLogs: "CLEAR LOGS",
-    eventLog: "EVENT LOG",
-    last20: "LAST 20",
-    lockLogs: "LOCK",
-    unlockLogs: "LIVE",
-    copyLogs: "COPY",
-    copied: "Copied",
-    copyFailed: "Copy failed",
-    settings: "SETTINGS",
-    settingsTitle: "SYSTEM SETTINGS",
-    close: "CLOSE",
+    resetTarget: "RESET TARGET",
+    reconnectRobot: "RECONNECT",
+    clickToLock: "Click video to lock person",
+    lockState: "LOCK",
+    connection: "CONNECTION",
+    status: "STATUS",
+    currentAction: "ACTION",
+    latency: "LATENCY",
+    tokens: "TOKENS",
+    controlSource: "SOURCE",
+    modelShort: "MODEL",
+    modelRuntime: "MODEL RUNTIME",
     robotIp: "Robot IP",
     llmEnabled: "LLM Enabled",
     llmBaseUrl: "LLM Base URL",
@@ -50,355 +70,132 @@ const i18n = {
     agentEnabled: "Agent Enabled",
     manualForwardSpeed: "Manual Forward Speed",
     manualTurnSpeed: "Manual Turn Speed",
-    manualDuration: "Manual Duration",
+    manualDuration: "Manual Action Duration",
     coreData: "Core Data",
-    reload: "RELOAD",
-    saveSettings: "SAVE SETTINGS",
-    settingsSaved: "Settings applied at runtime.",
-    settingsFailed: "Settings update failed",
-    vehicleDetails: "VEHICLE DETAILS",
-    connection: "Connection",
-    miniMap: "MINI MAP",
-    agentLog: "Agent Reasoning Log",
-    agentPlaceholder: "Task: What do you see? / Find the cup / Follow me",
-    linked: "linked",
-    lost: "lost",
+    safetyZone: "Safety Control",
+    chassisZone: "Chassis Control",
+    gimbalZone: "Gimbal Control",
+    modeZone: "Mode & Utility",
+    copied: "Copied",
+    copyFailed: "Copy failed",
     online: "online",
     offline: "offline",
     standby: "standby",
-    unknown: "unknown",
-    topLinked: "ok",
-    topLost: "lost",
-    topOnline: "on",
-    topOffline: "off",
-    topStandby: "idle",
-    topUnknown: "unk",
-    topThinking: "run",
-    connected: "CONNECTED",
-    disconnected: "DISCONNECTED",
-    thinking: "THINKING",
-    noScene: "No scene report yet.",
+    thinking: "thinking",
+    connected: "connected",
+    disconnected: "disconnected",
     none: "none",
-    person: "person",
   },
-  zh: {
-    langButton: "EN",
-    appTitle: "机器人",
-    liveFeed: "实时光学画面",
-    modeShort: "模式",
-    gestureShort: "手势",
-    targetShort: "目标",
-    vectorShort: "速度向量",
-    robotTelemetry: "机器人遥测",
-    battery: "电池",
-    aiLoad: "AI 算力",
-    modelState: "模型",
-    agentIntel: "智能体情报",
-    sceneUnderstanding: "场景理解",
-    actionPlan: "行动计划",
-    latency: "响应",
-    tokens: "Token",
-    send: "发送",
-    manualOverride: "手动接管",
-    lowSpeed: "低速安全",
-    emergencyStop: "紧急停止",
-    sleep: "软件休眠",
-    wake: "唤醒",
-    startFollow: "启动跟随",
-    pauseFollow: "暂停跟随",
-    forward: "前进",
-    turnLeft: "左转",
-    stop: "停止",
-    turnRight: "右转",
-    backward: "后退",
-    clearLogs: "清空日志",
-    eventLog: "事件日志",
-    last20: "最近 20 条",
-    lockLogs: "锁定",
-    unlockLogs: "实时",
-    copyLogs: "复制",
-    copied: "已复制",
-    copyFailed: "复制失败",
-    settings: "设置",
-    settingsTitle: "系统设置",
-    close: "关闭",
-    robotIp: "机器人 IP",
-    llmEnabled: "启用 LLM",
-    llmBaseUrl: "LLM 地址",
-    llmModel: "LLM 模型",
-    vlmEnabled: "启用 VLM",
-    vlmBaseUrl: "VLM 地址",
-    vlmModel: "VLM 模型",
-    agentEnabled: "启用 Agent",
-    manualForwardSpeed: "手动前进速度",
-    manualTurnSpeed: "手动转向速度",
-    manualDuration: "手动动作时长",
-    coreData: "核心数据",
-    reload: "重新读取",
-    saveSettings: "保存设置",
-    settingsSaved: "设置已在运行时生效。",
-    settingsFailed: "设置更新失败",
-    vehicleDetails: "车辆详情",
-    connection: "连接状态",
-    miniMap: "迷你雷达",
-    agentLog: "Agent 推理日志",
-    agentPlaceholder: "任务：你看到了什么？ / 帮我找水杯 / 跟着我",
-    linked: "已连接",
-    lost: "断开",
-    online: "在线",
-    offline: "离线",
-    standby: "待命",
-    unknown: "未知",
-    topLinked: "连接",
-    topLost: "断开",
-    topOnline: "在线",
-    topOffline: "离线",
-    topStandby: "待机",
-    topUnknown: "未知",
-    topThinking: "运行",
-    connected: "已连接",
-    disconnected: "未连接",
-    thinking: "推理中",
-    noScene: "暂无场景报告。",
-    none: "无",
-    person: "人",
+  en: {
+    appTitle: "RoboMaster Tactical AI Console",
+    liveFeed: "LIVE FEED",
+    modeShort: "MODE",
+    gestureShort: "GESTURE",
+    targetShort: "TARGET",
+    vectorShort: "VECTOR",
+    robotTelemetry: "ROBOT TELEMETRY",
+    battery: "BATTERY",
+    agentIntel: "AGENT INTELLIGENCE",
+    actionPlan: "ACTION PLAN",
+    sceneUnderstanding: "SCENE",
+    eventLog: "EVENT LOG",
+    subAgents: "SUB-AGENT STATUS",
+    detail: "DETAIL",
+    settings: "SETTINGS",
+    settingsTitle: "SYSTEM SETTINGS",
+    close: "CLOSE",
+    refresh: "REFRESH",
+    copy: "COPY",
+    clear: "CLEAR",
+    saveSettings: "SAVE SETTINGS",
+    manualOverride: "MANUAL OVERRIDE",
+    lowSpeed: "LOW SPEED",
+    emergencyStop: "EMERGENCY STOP",
+    sleep: "SLEEP",
+    wake: "WAKE",
+    startFollow: "START FOLLOW",
+    pauseFollow: "PAUSE FOLLOW",
+    forward: "FORWARD",
+    backward: "BACKWARD",
+    turnLeft: "TURN LEFT",
+    turnRight: "TURN RIGHT",
+    stop: "STOP",
+    strafeLeft: "STRAFE LEFT",
+    strafeRight: "STRAFE RIGHT",
+    gimbalUp: "GIMBAL UP",
+    gimbalDown: "GIMBAL DOWN",
+    gimbalLeft: "GIMBAL LEFT",
+    gimbalRight: "GIMBAL RIGHT",
+    gimbalCenter: "GIMBAL CENTER",
+    agentMode: "AGENT MODE",
+    gestureMode: "GESTURE MODE",
+    idleMode: "IDLE",
+    autoLock: "AUTO LOCK",
+    snapshot: "SNAPSHOT",
+    startRecord: "START RECORD",
+    stopRecord: "STOP RECORD",
+    clearLogs: "CLEAR LOGS",
+    resetTarget: "RESET TARGET",
+    reconnectRobot: "RECONNECT",
+    clickToLock: "Click video to lock person",
+    lockState: "LOCK",
+    connection: "CONNECTION",
+    status: "STATUS",
+    currentAction: "ACTION",
+    latency: "LATENCY",
+    tokens: "TOKENS",
+    controlSource: "SOURCE",
+    modelShort: "MODEL",
+    modelRuntime: "MODEL RUNTIME",
+    robotIp: "Robot IP",
+    llmEnabled: "LLM Enabled",
+    llmBaseUrl: "LLM Base URL",
+    llmModel: "LLM Model",
+    vlmEnabled: "VLM Enabled",
+    vlmBaseUrl: "VLM Base URL",
+    vlmModel: "VLM Model",
+    agentEnabled: "Agent Enabled",
+    manualForwardSpeed: "Manual Forward Speed",
+    manualTurnSpeed: "Manual Turn Speed",
+    manualDuration: "Manual Action Duration",
+    coreData: "Core Data",
+    safetyZone: "Safety Control",
+    chassisZone: "Chassis Control",
+    gimbalZone: "Gimbal Control",
+    modeZone: "Mode & Utility",
+    copied: "Copied",
+    copyFailed: "Copy failed",
+    online: "online",
+    offline: "offline",
+    standby: "standby",
+    thinking: "thinking",
+    connected: "connected",
+    disconnected: "disconnected",
+    none: "none",
   },
+};
+
+const DETAIL_META = {
+  telemetry: { endpoint: "/api/detail/telemetry", title: { zh: "Robot Telemetry Detail", en: "Robot Telemetry Detail" } },
+  agent: { endpoint: "/api/detail/agent", title: { zh: "Agent Intelligence Detail", en: "Agent Intelligence Detail" } },
+  logs: { endpoint: "/api/detail/logs", title: { zh: "Event Log Detail", en: "Event Log Detail" } },
+  models: { endpoint: "/api/detail/models", title: { zh: "Model Runtime Detail", en: "Model Runtime Detail" } },
+  sub_agents: { endpoint: "/api/detail/sub_agents", title: { zh: "Sub-Agent Status Detail", en: "Sub-Agent Status Detail" } },
 };
 
 const state = {
+  lang: localStorage.getItem("dashboardLanguage") || "zh",
   lastStatus: {},
-  lang: localStorage.getItem("dashboardLanguage") || "en",
-  logsLocked: false,
-  latestLogs: [],
+  currentDetailType: "",
+  currentDetailData: {},
 };
 
 function t(key) {
-  return i18n[state.lang]?.[key] || i18n.en[key] || key;
+  return I18N[state.lang]?.[key] || I18N.en[key] || key;
 }
 
-function setText(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = value ?? "--";
-}
-
-function localizeValue(value) {
-  if (value === true) return t("online");
-  if (value === false) return t("offline");
-  const key = String(value || "").toLowerCase();
-  return i18n[state.lang]?.[key] || value;
-}
-
-function compactStatus(value) {
-  const key = String(value || "").toLowerCase();
-  if (key === "linked" || key === "connected" || key === "ok") return t("topLinked");
-  if (key === "lost" || key === "disconnected") return t("topLost");
-  if (key === "online") return t("topOnline");
-  if (key === "offline") return t("topOffline");
-  if (key === "standby") return t("topStandby");
-  if (key === "unknown") return t("topUnknown");
-  if (key === "thinking") return t("topThinking");
-  return localizeValue(value);
-}
-
-function updateModeStyle(mode) {
-  const normalized = String(mode || "").toLowerCase();
-  document.body.dataset.mode = normalized || "unknown";
-  const modeEl = document.getElementById("mode");
-  modeEl?.classList.remove("mode-idle", "mode-follow", "mode-sleep", "mode-emergency", "mode-agent");
-  if (normalized === "sleep") modeEl?.classList.add("mode-sleep");
-  else if (normalized === "follow") modeEl?.classList.add("mode-follow");
-  else if (normalized === "emergency_stop") modeEl?.classList.add("mode-emergency");
-  else if (normalized === "agent_mode") modeEl?.classList.add("mode-agent");
-  else modeEl?.classList.add("mode-idle");
-}
-
-function applyLanguage() {
-  document.documentElement.lang = state.lang === "zh" ? "zh-CN" : "en-US";
-  document.title = t("appTitle");
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
-  });
-  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-    el.placeholder = t(el.dataset.i18nPlaceholder);
-  });
-  setText("langToggle", t("langButton"));
-  setText("logLockToggle", state.logsLocked ? t("unlockLogs") : t("lockLogs"));
-  renderStatus(state.lastStatus);
-  renderLogs(state.latestLogs, true);
-}
-
-function toggleLanguage() {
-  state.lang = state.lang === "zh" ? "en" : "zh";
-  localStorage.setItem("dashboardLanguage", state.lang);
-  applyLanguage();
-}
-
-function setLamp(id, status) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.remove("online", "standby");
-  if (status === "online" || status === true) el.classList.add("online");
-  else if (status === "standby") el.classList.add("standby");
-}
-
-function speedText(cmd) {
-  if (!cmd) return "x=0 z=0";
-  return `x=${Number(cmd.linear_x || 0).toFixed(2)} z=${Number(cmd.angular_z || 0).toFixed(2)}`;
-}
-
-async function sendControl(command, extra = {}) {
-  try {
-    setText("agentState", command);
-    const payload = { command, ...extra };
-    const res = await fetch("/api/control", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!data.ok) console.warn("control failed", data);
-    await refreshStatus();
-    await refreshLogs(true);
-  } catch (err) {
-    console.error("control request failed", err);
-  }
-}
-
-async function refreshStatus() {
-  try {
-    const res = await fetch("/api/status");
-    const data = await res.json();
-    state.lastStatus = data;
-    renderStatus(data);
-  } catch (err) {
-    setText("cameraState", t("offline"));
-    setLamp("cameraLamp", false);
-  }
-}
-
-async function refreshLogs(force = false) {
-  if (state.logsLocked && !force) return;
-  try {
-    const res = await fetch("/api/logs");
-    const data = await res.json();
-    renderLogs(data.logs || [], force);
-  } catch (err) {
-    renderLogs([{ message: `log feed offline: ${err}` }], force);
-  }
-}
-
-function renderStatus(data = {}) {
-  const agent = data.agent || {};
-  const gesture = data.gesture || {};
-  const safe = data.safe_cmd || { linear_x: data.linear_x || 0, angular_z: data.angular_z || 0 };
-  const target = data.target ? t("person") : localizeValue(data.target_name || "none");
-  const cameraStatus = data.camera_status || "unknown";
-  const yoloStatus = data.yolo_status || "unknown";
-  const handStatus = data.hand_status || "unknown";
-  const vlmStatus = data.vlm_status || "standby";
-  const llmStatus = data.llm_status || "standby";
-  const agentStatus = data.agent_status || agent.status || "standby";
-  const navStatus = data.nav_status || "standby";
-  const compute = data.ai_compute || {};
-
-  setText("rosState", data.connected ? t("topLinked") : t("topLost"));
-  setText("cameraState", compactStatus(cameraStatus));
-  setText("yoloState", compactStatus(yoloStatus));
-  setText("handState", compactStatus(handStatus));
-  setText("vlmState", compactStatus(vlmStatus));
-  setText("llmState", compactStatus(llmStatus));
-  setText("agentTopState", compactStatus(agentStatus));
-  setText("navState", compactStatus(navStatus));
-  setText("connectedBadge", data.connected ? t("connected") : t("disconnected"));
-  setText("videoBadge", cameraStatus === "online" ? t("online").toUpperCase() : t("standby").toUpperCase());
-
-  setLamp("rosLamp", data.connected ? "online" : false);
-  setLamp("cameraLamp", cameraStatus === "online" ? "online" : false);
-  setLamp("yoloLamp", yoloStatus === "online" ? "online" : false);
-  setLamp("handLamp", handStatus === "online" ? "online" : "standby");
-  setLamp("vlmLamp", vlmStatus === "online" ? "online" : "standby");
-  setLamp("llmLamp", llmStatus === "online" ? "online" : "standby");
-  setLamp("agentLamp", agentStatus === "online" || agentStatus === "thinking" ? "online" : "standby");
-  setLamp("navLamp", navStatus === "online" ? "online" : "standby");
-
-  setText("mode", data.mode || "--");
-  setText("hudMode", data.mode || "--");
-  updateModeStyle(data.mode || "");
-  setText("fps", data.fps ?? "--");
-  setText("hudFps", data.fps ?? "--");
-  setText("battery", data.battery == null ? "N/A" : `${data.battery}%`);
-  setText("linearX", Number(data.linear_x || safe.linear_x || 0).toFixed(2));
-  setText("angularZ", Number(data.angular_z || safe.angular_z || 0).toFixed(2));
-  setText("target", target);
-  setText("hudTarget", target);
-  setText("gesture", localizeValue(data.gesture_name || gesture.candidate || gesture.current || "none"));
-  setText("hudGesture", localizeValue(data.gesture_name || gesture.candidate || gesture.current || "none"));
-  setText("hudVector", speedText(safe));
-  setText("aiLoad", agent.job_running ? t("thinking") : `${compute.latency_ms ?? agent.latency_ms ?? 0} ms`);
-  setText("modelState", compute.model || "--");
-  setText("radarState", target);
-  moveRadarDot(data.target);
-
-  setText("agentState", agent.job_running ? t("thinking") : localizeValue(llmStatus).toUpperCase());
-  setText("sceneText", agent.vision_description || data.scene?.description || t("noScene"));
-  setText("agentPlan", JSON.stringify(agent.last_plan || {}, null, 2));
-  setText("agentLatency", `${agent.latency_ms || 0} ms`);
-  setText("agentTokens", agent.tokens?.total_tokens ?? 0);
-  renderAgentLogs(agent.logs || []);
-
-  if (document.getElementById("robotDetailsModal")?.classList.contains("open")) {
-    renderRobotDetails(data);
-  }
-}
-
-function renderLogs(logs, force = false) {
-  const el = document.getElementById("eventLog");
-  if (!el) return;
-  if (state.logsLocked && !force) return;
-  state.latestLogs = logs.slice(0, 20);
-  el.innerHTML = state.latestLogs.map((item) => {
-    const msg = item.message || item.reason || item.command || item.action || JSON.stringify(item);
-    const time = item.time || item.timestamp || "";
-    return `<li><strong>${String(time).slice(0, 19)}</strong> ${escapeHtml(String(msg))}</li>`;
-  }).join("");
-}
-
-function renderAgentLogs(logs = []) {
-  const el = document.getElementById("agentLog");
-  if (!el) return;
-  const recent = logs.slice(0, 20);
-  if (!recent.length) {
-    el.innerHTML = `<li>${escapeHtml(t("noScene"))}</li>`;
-    return;
-  }
-  el.innerHTML = recent.map((item) => {
-    const action = item.action || "STOP";
-    const reason = item.reason || item.message || "";
-    const latency = item.latency_ms == null ? "" : ` ${item.latency_ms}ms`;
-    return `<li><strong>${escapeHtml(String(action))}</strong>${escapeHtml(latency)} ${escapeHtml(String(reason))}</li>`;
-  }).join("");
-}
-
-function moveRadarDot(targetInfo) {
-  const dot = document.getElementById("radarDot");
-  if (!dot) return;
-  if (!targetInfo || targetInfo.center_x == null) {
-    dot.style.left = "50%";
-    dot.style.top = "50%";
-    dot.style.opacity = "0.35";
-    return;
-  }
-  const center = Number(targetInfo.center_x || 0);
-  const left = Math.max(20, Math.min(80, 50 + ((center - 320) / 320) * 30));
-  const size = Number(targetInfo.bbox_height_ratio || 0.3);
-  const top = Math.max(20, Math.min(78, 70 - size * 70));
-  dot.style.left = `${left}%`;
-  dot.style.top = `${top}%`;
-  dot.style.opacity = "1";
-}
-
-function escapeHtml(text) {
-  return text
+function escapeHtml(value) {
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -406,152 +203,332 @@ function escapeHtml(text) {
     .replaceAll("'", "&#039;");
 }
 
-function formatLogsForCopy() {
-  return state.latestLogs.map((item) => {
-    const msg = item.message || item.reason || item.command || item.action || JSON.stringify(item);
-    const time = item.time || item.timestamp || "";
-    return `${String(time).slice(0, 19)} ${msg}`;
-  }).join("\n");
+function setText(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value ?? "--";
 }
 
-async function copyLogs() {
-  const text = formatLogsForCopy();
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      const area = document.createElement("textarea");
-      area.value = text;
-      document.body.appendChild(area);
-      area.select();
-      document.execCommand("copy");
-      area.remove();
-    }
-    showLogHint(t("copied"));
-  } catch (err) {
-    showLogHint(`${t("copyFailed")}: ${err}`);
+function setTitle(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.title = value ?? "";
+}
+
+function setValue(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.value = value ?? "";
+}
+
+function setChecked(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.checked = Boolean(value);
+}
+
+function localizeStatus(value) {
+  const key = String(value ?? "").toLowerCase();
+  return I18N[state.lang]?.[key] || value || "--";
+}
+
+function ellipsis(value, limit = 40) {
+  const text = String(value ?? "");
+  return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
+
+function setLamp(id, status) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  node.classList.remove("online", "standby");
+  const value = String(status ?? "").toLowerCase();
+  if (["online", "connected", "ready", "locked", "active", "candidate"].includes(value)) {
+    node.classList.add("online");
+  } else if (["standby", "idle", "thinking", "scanning", "lost"].includes(value)) {
+    node.classList.add("standby");
   }
 }
 
-function showLogHint(text) {
-  const hint = document.getElementById("logCopyHint");
-  if (!hint) return;
-  hint.textContent = text;
-  hint.classList.add("show");
-  setTimeout(() => hint.classList.remove("show"), 1600);
+function commandVectorText(cmd = {}) {
+  const x = Number(cmd.linear_x || 0).toFixed(2);
+  const y = Number(cmd.linear_y || 0).toFixed(2);
+  const z = Number(cmd.angular_z || 0).toFixed(2);
+  return `x=${x} y=${y} z=${z}`;
 }
 
-function openSettings() {
-  document.getElementById("settingsModal")?.classList.add("open");
-  fillSettings(fallbackSettingsFromStatus(), state.lastStatus || {});
-  loadSettings();
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  return response.json();
 }
 
-function closeSettings() {
-  document.getElementById("settingsModal")?.classList.remove("open");
+async function sendControl(command, extra = {}) {
+  const payload = await fetchJson("/api/control", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command, ...extra }),
+  });
+  if (payload.status) {
+    state.lastStatus = payload.status;
+    renderStatus(payload.status);
+  } else {
+    await refreshStatus();
+  }
+  if (state.currentDetailType) {
+    await refreshDetailModal();
+  }
 }
 
-function openRobotDetails() {
-  document.getElementById("robotDetailsModal")?.classList.add("open");
-  renderRobotDetails(state.lastStatus || {});
+async function refreshStatus() {
+  const payload = await fetchJson("/api/status");
+  state.lastStatus = payload;
+  renderStatus(payload);
 }
 
-function closeRobotDetails() {
-  document.getElementById("robotDetailsModal")?.classList.remove("open");
+function renderStatus(data = {}) {
+  const telemetry = data.telemetry_summary || {};
+  const agentSummary = data.agent_summary || {};
+  const modelRuntime = data.model_runtime || {};
+  const subAgents = data.sub_agents || {};
+
+  setText("rosState", localizeStatus(data.connected ? "connected" : "disconnected"));
+  setText("cameraState", localizeStatus(data.camera_status || "offline"));
+  setText("followState", data.follow_lock_state || "--");
+  setText("agentTopState", localizeStatus(data.agent_status || "standby"));
+  setText("recordState", data.recording?.active ? "ON" : "OFF");
+  setLamp("rosLamp", data.connected ? "connected" : "offline");
+  setLamp("cameraLamp", data.camera_status || "offline");
+  setLamp("followLamp", data.follow_lock_state || "none");
+  setLamp("agentLamp", data.agent_status || "standby");
+  setLamp("recordLamp", data.recording?.active ? "online" : "standby");
+
+  setText("videoBadge", String(data.camera_status || "standby").toUpperCase());
+  setText("hudMode", data.mode || "--");
+  setText("hudLockState", data.follow_lock_state || "--");
+  setText("hudTarget", localizeStatus(data.target_name || "none"));
+  setText("hudGesture", localizeStatus(data.gesture_name || "none"));
+  setText("hudFps", data.fps ?? "--");
+  setText("hudVector", commandVectorText(data.safe_cmd || {}));
+
+  setText("telemetryConnection", telemetry.connection || "--");
+  setText("telemetryBattery", telemetry.battery == null ? "N/A" : `${telemetry.battery}%`);
+  setText("telemetryMode", telemetry.mode || "--");
+  setText("telemetryLinearX", telemetry.linear_x ?? "--");
+  setText("telemetryAngularZ", telemetry.angular_z ?? "--");
+  setText("telemetrySource", ellipsis(telemetry.control_source || "--", 18));
+  setTitle("telemetrySource", telemetry.control_source || "--");
+  setText("telemetryTarget", telemetry.target_summary || "--");
+  setText("telemetryModel", telemetry.model_name_short || "--");
+  setTitle("telemetryModel", telemetry.model_name_short || "--");
+
+  setText("agentStatusSummary", localizeStatus(agentSummary.status || "standby"));
+  setText("agentSceneSummary", ellipsis(agentSummary.scene_summary || "--", 54));
+  setTitle("agentSceneSummary", agentSummary.scene_summary || "--");
+  setText("agentPlanSummary", ellipsis(agentSummary.action_summary || "--", 54));
+  setTitle("agentPlanSummary", agentSummary.action_summary || "--");
+  setText("agentActionSummary", agentSummary.current_action || "--");
+  setText("agentLatencySummary", `${agentSummary.latency_ms ?? 0} ms`);
+  setText("agentTokenSummary", agentSummary.token_summary?.total_tokens ?? 0);
+
+  setText("followAgentSummary", subAgents.FOLLOW_AGENT?.status || "--");
+  setText("gestureAgentSummary", subAgents.GESTURE_AGENT?.status || "--");
+  setText("safetyAgentSummary", subAgents.SAFETY_AGENT?.status || "--");
+  setText("vlmAgentSummary", subAgents.VLM_AGENT?.status || "--");
+  setText("llmAgentSummary", subAgents.LLM_AGENT?.status || "--");
+  setText("manualAgentSummary", subAgents.MANUAL_AGENT?.status || "--");
+  setText("dashboardAgentSummary", subAgents.DASHBOARD_AGENT?.status || "--");
+
+  setText("modelYoloSummary", modelRuntime.YOLO?.status || "--");
+  setText("modelHandSummary", modelRuntime.HAND?.status || "--");
+  setText("modelVlmSummary", modelRuntime.VLM?.status || "--");
+  setText("modelLlmSummary", modelRuntime.LLM?.status || "--");
+  setText("modelAgentSummary", modelRuntime.AGENT?.status || "--");
+
+  renderEventSummary(data.event_summary || []);
+
+  const followButton = document.getElementById("startFollowButton");
+  if (followButton) followButton.disabled = !data.can_start_follow;
 }
 
-function renderRobotDetails(data = {}) {
-  const safe = data.safe_cmd || { linear_x: data.linear_x || 0, angular_z: data.angular_z || 0 };
-  const rawDetails = {
-    dashboard_version: data.dashboard_version,
-    robot_ip: data.robot_ip,
-    camera_topic: data.camera_topic,
-    cmd_vel_topic: data.cmd_vel_topic,
-    mode: data.mode,
-    battery: data.battery,
-    fps: data.fps,
-    camera_status: data.camera_status,
-    llm_status: data.llm_status,
-    control_reason: data.control_reason,
-    safety_reason: data.safety_reason,
-    last_image_age_sec: data.last_image_age_sec,
-    last_target_age_sec: data.last_target_age_sec,
-  };
+function renderEventSummary(items) {
+  const node = document.getElementById("eventSummaryList");
+  if (!node) return;
+  if (!items.length) {
+    node.innerHTML = `<li>${escapeHtml(t("none"))}</li>`;
+    return;
+  }
+  node.innerHTML = items.slice(0, 5).map((item) => {
+    const full = `${item.time || "--"} [${item.source || "SYSTEM"}] ${item.message || ""}`;
+    return `<li title="${escapeHtml(full)}">${escapeHtml(ellipsis(full, 82))}</li>`;
+  }).join("");
+}
 
-  setText("detailConnected", data.connected ? t("connected") : t("disconnected"));
-  setText("detailRobotIp", data.robot_ip || "--");
-  setText("detailBattery", data.battery == null ? "N/A" : `${data.battery}%`);
-  setText("detailMode", data.mode || "--");
-  setText("detailCameraTopic", data.camera_topic || "--");
-  setText("detailCmdVelTopic", data.cmd_vel_topic || "--");
-  setText("detailCameraStatus", localizeValue(data.camera_status || "unknown"));
-  setText("detailLlmStatus", localizeValue(data.llm_status || "standby"));
-  setText("detailFps", data.fps ?? "--");
-  setText("detailLinearX", Number(data.linear_x || safe.linear_x || 0).toFixed(2));
-  setText("detailAngularZ", Number(data.angular_z || safe.angular_z || 0).toFixed(2));
-  setText("detailTarget", data.target ? t("person") : localizeValue(data.target_name || "none"));
-  setText("robotDetailsRaw", JSON.stringify(rawDetails, null, 2));
+async function openDetailModal(type) {
+  const meta = DETAIL_META[type];
+  if (!meta) return;
+  const payload = await fetchJson(meta.endpoint);
+  state.currentDetailType = type;
+  state.currentDetailData = payload.data || {};
+  document.getElementById("detailModalTitle").textContent = meta.title[state.lang] || meta.title.en;
+  document.getElementById("detailModal").classList.add("open");
+  renderDetailModal(type, state.currentDetailData);
+}
+
+function closeDetailModal() {
+  document.getElementById("detailModal").classList.remove("open");
+}
+
+async function refreshDetailModal() {
+  if (!state.currentDetailType) return;
+  await openDetailModal(state.currentDetailType);
+}
+
+async function copyDetailContent() {
+  const text = JSON.stringify(state.currentDetailData || {}, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    showHint(t("copied"));
+  } catch (error) {
+    showHint(`${t("copyFailed")}: ${error}`);
+  }
+}
+
+async function clearDetailLogs() {
+  if (state.currentDetailType !== "logs") return;
+  await fetchJson("/api/logs/clear", { method: "POST" });
+  await refreshStatus();
+  await refreshDetailModal();
+}
+
+function renderDetailModal(type, data) {
+  const body = document.getElementById("detailBody");
+  const filter = document.getElementById("detailFilter");
+  const clearButton = document.getElementById("detailClear");
+
+  filter.style.display = type === "logs" ? "inline-block" : "none";
+  clearButton.style.display = type === "logs" ? "inline-flex" : "none";
+
+  if (type === "logs") {
+    renderLogDetail(body, filter, data);
+    return;
+  }
+
+  filter.innerHTML = "";
+  filter.onchange = null;
+
+  if (type === "sub_agents") {
+    body.innerHTML = renderSubAgentDetail(data);
+    return;
+  }
+
+  body.innerHTML = renderKeyValueDetail(data);
+}
+
+function renderLogDetail(body, filter, data) {
+  const filters = Array.isArray(data.filters) ? data.filters : ["ALL"];
+  const currentValue = filter.value || "ALL";
+  filter.innerHTML = filters.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+  filter.value = filters.includes(currentValue) ? currentValue : "ALL";
+  filter.onchange = () => renderLogDetail(body, filter, data);
+
+  const selected = filter.value || "ALL";
+  const items = (data.items || []).filter((item) => {
+    if (selected === "ALL") return true;
+    if (selected === "ERROR") return String(item.level || "").toUpperCase() === "ERROR";
+    return String(item.source || "").toUpperCase() === selected;
+  });
+
+  body.innerHTML = `
+    <ul class="detail-log-list">
+      ${items.map((item) => `
+        <li>
+          <strong>${escapeHtml(item.time || "--")}</strong>
+          [${escapeHtml(item.source || "SYSTEM")}]
+          ${escapeHtml(item.message || "")}
+        </li>
+      `).join("") || `<li>${escapeHtml(t("none"))}</li>`}
+    </ul>
+  `;
+}
+
+function renderSubAgentDetail(data) {
+  const items = data.items || {};
+  const followMeta = data.follow_meta || {};
+  const cards = Object.entries(items).map(([name, info]) => `
+    <div class="detail-item">
+      <span>${escapeHtml(name)}</span>
+      <strong>${escapeHtml(String(info.status || "--"))}</strong>
+      <p>${escapeHtml(String(info.message || info.last_event || "--"))}</p>
+      <pre>${escapeHtml(JSON.stringify(info, null, 2))}</pre>
+    </div>
+  `);
+  cards.push(`
+    <div class="detail-item">
+      <span>FOLLOW_META</span>
+      <pre>${escapeHtml(JSON.stringify(followMeta, null, 2))}</pre>
+    </div>
+  `);
+  return `<div class="detail-grid">${cards.join("")}</div>`;
+}
+
+function renderKeyValueDetail(data) {
+  const cards = Object.entries(data || {}).map(([key, value]) => {
+    const content = value && typeof value === "object"
+      ? `<pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>`
+      : `<strong>${escapeHtml(String(value))}</strong>`;
+    return `
+      <div class="detail-item">
+        <span>${escapeHtml(key)}</span>
+        ${content}
+      </div>
+    `;
+  });
+  return `<div class="detail-grid">${cards.join("")}</div>`;
+}
+
+function applyLanguage() {
+  document.documentElement.lang = state.lang === "zh" ? "zh-CN" : "en-US";
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+  document.title = t("appTitle");
+  setText("langToggle", state.lang === "zh" ? "EN" : "ZH");
+  if (state.currentDetailType) {
+    const meta = DETAIL_META[state.currentDetailType];
+    if (meta) setText("detailModalTitle", meta.title[state.lang] || meta.title.en);
+  }
+}
+
+function toggleLanguage() {
+  state.lang = state.lang === "zh" ? "en" : "zh";
+  localStorage.setItem("dashboardLanguage", state.lang);
+  applyLanguage();
+  renderStatus(state.lastStatus);
+  if (state.currentDetailType) {
+    renderDetailModal(state.currentDetailType, state.currentDetailData);
+  }
+}
+
+function showHint(text) {
+  setText("settingsMessage", text);
+}
+
+function fillSettings(settings = {}) {
+  setValue("settingRobotIp", settings.robot_ip);
+  setChecked("settingLlmEnabled", settings.llm_enabled);
+  setValue("settingLlmBaseUrl", settings.llm_base_url);
+  setValue("settingLlmModel", settings.llm_model);
+  setChecked("settingVlmEnabled", settings.vlm_enabled);
+  setValue("settingVlmBaseUrl", settings.vlm_base_url);
+  setValue("settingVlmModel", settings.vlm_model);
+  setChecked("settingAgentEnabled", settings.agent_enabled);
+  setValue("settingManualForwardSpeed", settings.manual_forward_speed);
+  setValue("settingManualTurnSpeed", settings.manual_turn_speed);
+  setValue("settingManualDuration", settings.manual_action_duration);
 }
 
 async function loadSettings() {
-  try {
-    const res = await fetch("/api/settings");
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.message || "settings unavailable");
-    fillSettings(data.settings || {}, data.core || {});
-    setText("settingsMessage", "");
-  } catch (err) {
-    fillSettings(fallbackSettingsFromStatus(), state.lastStatus || {});
-    setText("settingsMessage", `${t("settingsFailed")}: ${err}`);
-  }
+  const payload = await fetchJson("/api/settings");
+  fillSettings(payload.settings || {});
+  setText("settingsCoreData", JSON.stringify(payload.core || {}, null, 2));
 }
 
-function fillSettings(settings, core) {
-  const merged = { ...fallbackSettingsFromStatus(), ...(settings || {}) };
-  setInputValue("settingRobotIp", merged.robot_ip);
-  setInputChecked("settingLlmEnabled", merged.llm_enabled);
-  setInputValue("settingLlmBaseUrl", merged.llm_base_url);
-  setInputValue("settingLlmModel", merged.llm_model);
-  setInputChecked("settingVlmEnabled", merged.vlm_enabled);
-  setInputValue("settingVlmBaseUrl", merged.vlm_base_url);
-  setInputValue("settingVlmModel", merged.vlm_model);
-  setInputChecked("settingAgentEnabled", merged.agent_enabled);
-  setInputValue("settingManualForwardSpeed", merged.manual_forward_speed);
-  setInputValue("settingManualTurnSpeed", merged.manual_turn_speed);
-  setInputValue("settingManualDuration", merged.manual_action_duration);
-  setText("settingsCoreData", JSON.stringify(core, null, 2));
-}
-
-function fallbackSettingsFromStatus() {
-  const status = state.lastStatus || {};
-  const runtime = status.runtime_settings || {};
-  const compute = status.ai_compute || {};
-  return {
-    robot_ip: runtime.robot_ip ?? status.robot_ip ?? "",
-    llm_enabled: runtime.llm_enabled ?? status.agent?.enabled ?? false,
-    llm_base_url: runtime.llm_base_url ?? "",
-    llm_model: runtime.llm_model ?? compute.model ?? "",
-    vlm_enabled: runtime.vlm_enabled ?? false,
-    vlm_base_url: runtime.vlm_base_url ?? "",
-    vlm_model: runtime.vlm_model ?? compute.vlm_model ?? "",
-    agent_enabled: runtime.agent_enabled ?? status.agent?.enabled ?? false,
-    manual_forward_speed: runtime.manual_forward_speed ?? "",
-    manual_turn_speed: runtime.manual_turn_speed ?? "",
-    manual_action_duration: runtime.manual_action_duration ?? "",
-  };
-}
-
-function setInputValue(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.value = value ?? "";
-}
-
-function setInputChecked(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.checked = Boolean(value);
-}
-
-function readSettingsForm() {
+function readSettings() {
   return {
     robot_ip: document.getElementById("settingRobotIp")?.value || "",
     llm_enabled: document.getElementById("settingLlmEnabled")?.checked || false,
@@ -568,68 +545,90 @@ function readSettingsForm() {
 }
 
 async function saveSettings() {
-  try {
-    const res = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ settings: readSettingsForm() }),
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.message || "settings rejected");
-    fillSettings(data.settings || {}, data.core || {});
-    setText("settingsMessage", t("settingsSaved"));
-    await refreshStatus();
-    await refreshLogs(true);
-  } catch (err) {
-    setText("settingsMessage", `${t("settingsFailed")}: ${err}`);
-  }
+  const payload = await fetchJson("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ settings: readSettings() }),
+  });
+  fillSettings(payload.settings || {});
+  setText("settingsCoreData", JSON.stringify(payload.core || {}, null, 2));
+  showHint(payload.success ? "OK" : payload.error || "failed");
 }
 
-function toggleLogLock(forceValue = null) {
-  state.logsLocked = forceValue === null ? !state.logsLocked : Boolean(forceValue);
-  const button = document.getElementById("logLockToggle");
-  button?.classList.toggle("active", state.logsLocked);
-  setText("logLockToggle", state.logsLocked ? t("unlockLogs") : t("lockLogs"));
-  if (!state.logsLocked) refreshLogs(true);
-}
-
-function boot() {
+function bindCommands() {
   document.querySelectorAll("[data-command]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const command = button.dataset.command;
-      if (command === "AGENT_QUERY") {
-        const text = document.getElementById("agentQuery")?.value || "";
-        sendControl(command, { text });
-      } else {
-        sendControl(command);
-      }
+    button.addEventListener("click", () => sendControl(button.dataset.command));
+  });
+
+  document.getElementById("videoFeed")?.addEventListener("click", (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    sendControl("LOCK_TARGET", { x, y });
+  });
+}
+
+function bindDetailTriggers() {
+  document.querySelectorAll(".summary-card").forEach((card) => {
+    card.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      openDetailModal(card.dataset.detailType);
     });
   });
-  document.getElementById("langToggle")?.addEventListener("click", toggleLanguage);
-  document.getElementById("logLockToggle")?.addEventListener("click", () => toggleLogLock());
-  document.getElementById("copyLogs")?.addEventListener("click", copyLogs);
-  document.getElementById("eventLog")?.addEventListener("mouseenter", () => toggleLogLock(true));
-  document.getElementById("settingsToggle")?.addEventListener("click", openSettings);
-  document.getElementById("settingsClose")?.addEventListener("click", closeSettings);
+
+  document.querySelectorAll(".detail-button").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openDetailModal(button.dataset.detailType);
+    });
+  });
+
+  document.getElementById("rosDetailsToggle")?.addEventListener("click", () => openDetailModal("telemetry"));
+}
+
+function bindSettingsModal() {
+  document.getElementById("settingsToggle")?.addEventListener("click", () => {
+    document.getElementById("settingsModal").classList.add("open");
+  });
+  document.getElementById("settingsClose")?.addEventListener("click", () => {
+    document.getElementById("settingsModal").classList.remove("open");
+  });
+  document.getElementById("settingsModal")?.addEventListener("click", (event) => {
+    if (event.target?.id === "settingsModal") {
+      document.getElementById("settingsModal").classList.remove("open");
+    }
+  });
   document.getElementById("settingsReload")?.addEventListener("click", loadSettings);
   document.getElementById("settingsSave")?.addEventListener("click", saveSettings);
-  document.getElementById("settingsModal")?.addEventListener("click", (event) => {
-    if (event.target?.id === "settingsModal") closeSettings();
-  });
-  document.getElementById("rosDetailsToggle")?.addEventListener("click", openRobotDetails);
-  document.getElementById("robotDetailsClose")?.addEventListener("click", closeRobotDetails);
-  document.getElementById("robotDetailsModal")?.addEventListener("click", (event) => {
-    if (event.target?.id === "robotDetailsModal") closeRobotDetails();
-  });
+}
 
+function bindDetailModal() {
+  document.getElementById("detailClose")?.addEventListener("click", closeDetailModal);
+  document.getElementById("detailRefresh")?.addEventListener("click", refreshDetailModal);
+  document.getElementById("detailCopy")?.addEventListener("click", copyDetailContent);
+  document.getElementById("detailClear")?.addEventListener("click", clearDetailLogs);
+  document.getElementById("detailModal")?.addEventListener("click", (event) => {
+    if (event.target?.id === "detailModal") closeDetailModal();
+  });
+}
+
+function startClock() {
+  const updateClock = () => setText("clock", new Date().toLocaleTimeString());
+  updateClock();
+  window.setInterval(updateClock, 1000);
+}
+
+async function boot() {
   applyLanguage();
-  setInterval(() => {
-    setText("clock", new Date().toLocaleTimeString());
-    refreshStatus();
-  }, 500);
-  setInterval(() => refreshLogs(false), 1000);
-  refreshStatus();
-  refreshLogs(true);
+  bindCommands();
+  bindDetailTriggers();
+  bindSettingsModal();
+  bindDetailModal();
+  document.getElementById("langToggle")?.addEventListener("click", toggleLanguage);
+  startClock();
+  window.setInterval(refreshStatus, 1000);
+  await refreshStatus();
+  await loadSettings();
 }
 
 document.addEventListener("DOMContentLoaded", boot);

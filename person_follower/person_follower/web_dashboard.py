@@ -1,8 +1,4 @@
-"""Flask Dashboard 服务：战术机器人指挥舱 UI。
-
-这个模块只负责 Web 展示和 API 转发。所有 ROS2 控制仍由主节点负责，
-Flask 线程异常不会影响机器人控制线程。
-"""
+"""Flask Dashboard 服务，负责 Tactical UI 和详情 API。"""
 
 import os
 import threading
@@ -13,7 +9,7 @@ import cv2
 from flask import Flask, Response, jsonify, render_template, request
 
 
-DASHBOARD_VERSION = "tactical-sleep-mode-20260604"
+DASHBOARD_VERSION = "tactical-detail-modal-20260604"
 
 
 class DashboardServer:
@@ -50,6 +46,22 @@ class DashboardServer:
         }
         self._setup_routes()
 
+    def _ok(self, data: Dict[str, object]) -> Dict[str, object]:
+        """统一成功响应。"""
+        return {"success": True, "data": data, "timestamp": round(time.time(), 3)}
+
+    def _error(self, message: str) -> Dict[str, object]:
+        """统一错误响应。"""
+        return {"success": False, "error": message, "timestamp": round(time.time(), 3)}
+
+    def _status_copy(self) -> Dict[str, object]:
+        with self.lock:
+            return dict(self.status)
+
+    def _detail_data(self, name: str) -> Dict[str, object]:
+        status = self._status_copy()
+        return dict(status.get("details", {}).get(name, {}))
+
     def _setup_routes(self) -> None:
         @self.app.after_request
         def no_cache(response):
@@ -65,29 +77,19 @@ class DashboardServer:
 
         @self.app.route("/api/dashboard/version")
         def api_dashboard_version():
-            return jsonify(dict(self.version_info))
+            return jsonify(self._ok(dict(self.version_info)))
 
         @self.app.route("/api/status")
         def api_status():
             try:
-                with self.lock:
-                    return jsonify(dict(self.status))
+                return jsonify(self._status_copy())
             except Exception as exc:
-                return jsonify({"ok": False, "message": str(exc)}), 500
-
-        @self.app.route("/api/logs")
-        def api_logs():
-            try:
-                with self.lock:
-                    logs = list(self.status.get("event_logs", []))
-                return jsonify({"logs": logs})
-            except Exception as exc:
-                return jsonify({"ok": False, "message": str(exc), "logs": []}), 500
+                return jsonify(self._error(str(exc))), 500
 
         @self.app.route("/api/settings", methods=["GET", "POST"])
         def api_settings():
             if self.settings_callback is None:
-                return jsonify({"ok": False, "message": "no settings callback"}), 503
+                return jsonify(self._error("no settings callback")), 503
             try:
                 if request.method == "GET":
                     return jsonify(self.settings_callback(None))
@@ -96,34 +98,88 @@ class DashboardServer:
                 self._merge_callback_status(result)
                 return jsonify(result)
             except Exception as exc:
-                return jsonify({"ok": False, "message": str(exc)}), 500
+                return jsonify(self._error(str(exc))), 500
 
         @self.app.route("/api/control", methods=["POST"])
         def api_control():
             if self.command_callback is None:
-                return jsonify({"ok": False, "message": "no command callback"}), 503
+                return jsonify(self._error("no command callback")), 503
             try:
                 payload = request.get_json(silent=True) or {}
                 command = str(payload.get("command", "")).strip().upper()
                 if not command:
-                    return jsonify({"ok": False, "message": "missing command"}), 400
+                    return jsonify(self._error("missing command")), 400
                 result = self.command_callback(command, payload)
                 self._merge_callback_status(result)
                 return jsonify(result)
             except Exception as exc:
-                return jsonify({"ok": False, "message": str(exc)}), 500
+                return jsonify(self._error(str(exc))), 500
 
         @self.app.route("/api/control/<command>", methods=["POST"])
         def api_control_compat(command):
             if self.command_callback is None:
-                return jsonify({"ok": False, "message": "no command callback"}), 503
+                return jsonify(self._error("no command callback")), 503
             try:
                 payload = request.get_json(silent=True) or {}
                 result = self.command_callback(str(command).strip().upper(), payload)
                 self._merge_callback_status(result)
                 return jsonify(result)
             except Exception as exc:
-                return jsonify({"ok": False, "message": str(exc)}), 500
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/logs")
+        def api_logs():
+            try:
+                logs = self._detail_data("logs").get("items", [])
+                return jsonify({"logs": logs})
+            except Exception as exc:
+                return jsonify({"logs": [], "success": False, "error": str(exc)}), 500
+
+        @self.app.route("/api/detail/telemetry")
+        def api_detail_telemetry():
+            try:
+                return jsonify(self._ok(self._detail_data("telemetry")))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/detail/agent")
+        def api_detail_agent():
+            try:
+                return jsonify(self._ok(self._detail_data("agent")))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/detail/logs")
+        def api_detail_logs():
+            try:
+                return jsonify(self._ok(self._detail_data("logs")))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/detail/models")
+        def api_detail_models():
+            try:
+                return jsonify(self._ok(self._detail_data("models")))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/detail/sub_agents")
+        def api_detail_sub_agents():
+            try:
+                return jsonify(self._ok(self._detail_data("sub_agents")))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/logs/clear", methods=["POST"])
+        def api_logs_clear():
+            if self.command_callback is None:
+                return jsonify(self._error("no command callback")), 503
+            try:
+                result = self.command_callback("CLEAR_LOGS", {})
+                self._merge_callback_status(result)
+                return jsonify(self._ok({"cleared": True}))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
 
         @self.app.route("/video_feed")
         def video_feed():
@@ -138,6 +194,11 @@ class DashboardServer:
     def _merge_callback_status(self, result: Dict[str, object]) -> None:
         """把控制回调返回的即时状态合并进 Dashboard 缓存。"""
         if not isinstance(result, dict):
+            return
+        status = result.get("status")
+        if isinstance(status, dict):
+            with self.lock:
+                self.status = dict(status)
             return
         with self.lock:
             if "event_logs" in result:

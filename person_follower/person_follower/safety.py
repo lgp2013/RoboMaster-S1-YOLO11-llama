@@ -8,11 +8,7 @@ from .utils import clamp
 
 
 class SafetyGuard:
-    """最终安全层：限速、图像超时停机、异常停机。
-
-    这里不会做真正的避障，因为普通 RGB 摄像头无法可靠判断墙、桌子、
-    柜子的距离；它负责保证任何上层输出都不会变成高速或持续危险动作。
-    """
+    """最终安全层，负责限速、超时停机和统一零速度回退。"""
 
     def __init__(
         self,
@@ -37,10 +33,7 @@ class SafetyGuard:
         image_age_sec: float,
         command_age_sec: float = 0.0,
     ) -> Tuple[Twist, str]:
-        """对任意控制器输出做最终过滤。
-
-        allow_motion=False 时只允许 stop。图像超过 1 秒未更新时必须 stop。
-        """
+        """对任意底盘命令做最终过滤。"""
         safe = Twist()
         if image_age_sec > self.image_timeout_sec:
             return safe, "stop: image timeout"
@@ -50,10 +43,9 @@ class SafetyGuard:
             return safe, "stop: motion disabled by mode"
 
         safe.linear.x = clamp(cmd.linear.x, -self.max_linear_speed, self.max_linear_speed)
+        safe.linear.y = clamp(cmd.linear.y, -self.max_linear_speed, self.max_linear_speed)
         safe.angular.z = clamp(cmd.angular.z, -self.max_angular_speed, self.max_angular_speed)
 
-        # S1 跟随系统只允许前后移动和原地旋转，不允许横移或其它轴速度。
-        safe.linear.y = 0.0
         safe.linear.z = 0.0
         safe.angular.x = 0.0
         safe.angular.y = 0.0

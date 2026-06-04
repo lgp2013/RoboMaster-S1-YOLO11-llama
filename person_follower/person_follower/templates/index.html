@@ -10,22 +10,20 @@
 <body>
   <div class="noise"></div>
   <div class="scanline"></div>
+
   <header class="topbar">
     <div class="brand-block">
       <div class="brand-kicker">TACTICAL ROBOTICS COMMAND CENTER</div>
-      <h1 id="consoleTitle" data-i18n="appTitle">RoboMaster Tactical AI Console</h1>
+      <h1 data-i18n="appTitle">RoboMaster Tactical AI Console</h1>
     </div>
     <div class="top-status">
       <button class="status-pill status-button" id="rosDetailsToggle" type="button"><span class="lamp" id="rosLamp"></span><span>ROS</span><strong id="rosState">--</strong></button>
       <div class="status-pill"><span class="lamp" id="cameraLamp"></span><span>CAM</span><strong id="cameraState">--</strong></div>
-      <div class="status-pill"><span class="lamp" id="yoloLamp"></span><span>YOLO</span><strong id="yoloState">--</strong></div>
-      <div class="status-pill"><span class="lamp" id="handLamp"></span><span>HAND</span><strong id="handState">--</strong></div>
-      <div class="status-pill"><span class="lamp" id="vlmLamp"></span><span>VLM</span><strong id="vlmState">--</strong></div>
-      <div class="status-pill"><span class="lamp" id="llmLamp"></span><span>LLM</span><strong id="llmState">--</strong></div>
-      <div class="status-pill"><span class="lamp" id="agentLamp"></span><span>AGENT</span><strong id="agentTopState">--</strong></div>
-      <div class="status-pill"><span class="lamp" id="navLamp"></span><span>NAV</span><strong id="navState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="followLamp"></span><span>FOLLOW</span><strong id="followState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="agentLamp"></span><span>LLM</span><strong id="agentTopState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="recordLamp"></span><span>REC</span><strong id="recordState">--</strong></div>
       <button class="settings-toggle" id="settingsToggle" type="button" data-i18n="settings">SETTINGS</button>
-      <button class="lang-toggle" id="langToggle" type="button">中文</button>
+      <button class="lang-toggle" id="langToggle" type="button">EN</button>
       <div class="clock" id="clock">--:--:--</div>
     </div>
   </header>
@@ -37,93 +35,166 @@
         <strong id="videoBadge">STANDBY</strong>
       </div>
       <div class="video-frame">
-        <img src="/video_feed" alt="RoboMaster camera feed">
+        <img id="videoFeed" src="/video_feed" alt="RoboMaster camera feed">
         <div class="hud-grid"></div>
         <div class="crosshair"></div>
         <div class="lock-reticle"><i></i><i></i><i></i><i></i></div>
         <div class="hud-top-left">
           <div><span data-i18n="modeShort">MODE</span> <strong id="hudMode">--</strong></div>
-          <div>FPS <strong id="hudFps">--</strong></div>
+          <div><span data-i18n="lockState">LOCK</span> <strong id="hudLockState">NONE</strong></div>
+          <div><span data-i18n="targetShort">TARGET</span> <strong id="hudTarget">--</strong></div>
           <div><span data-i18n="gestureShort">GESTURE</span> <strong id="hudGesture">--</strong></div>
         </div>
         <div class="hud-bottom-right">
-          <div><span data-i18n="targetShort">TARGET</span> <strong id="hudTarget">--</strong></div>
+          <div>FPS <strong id="hudFps">--</strong></div>
           <div><span data-i18n="vectorShort">VECTOR</span> <strong id="hudVector">x=0 z=0</strong></div>
+          <div class="hint-line" data-i18n="clickToLock">Click video to lock person</div>
         </div>
       </div>
     </section>
 
     <aside class="right-stack">
-      <section class="cut-panel status-panel">
-        <div class="panel-header"><span data-i18n="robotTelemetry">ROBOT TELEMETRY</span><strong id="connectedBadge">--</strong></div>
-        <div class="metric-grid">
-          <div class="metric"><span data-i18n="battery">BATTERY</span><strong id="battery">--</strong></div>
-          <div class="metric"><span data-i18n="modeShort">MODE</span><strong id="mode">--</strong></div>
-          <div class="metric"><span>LINEAR X</span><strong id="linearX">--</strong></div>
-          <div class="metric"><span>ANGULAR Z</span><strong id="angularZ">--</strong></div>
-          <div class="metric"><span data-i18n="targetShort">TARGET</span><strong id="target">--</strong></div>
-          <div class="metric"><span data-i18n="gestureShort">GESTURE</span><strong id="gesture">--</strong></div>
-          <div class="metric"><span data-i18n="aiLoad">AI LOAD</span><strong id="aiLoad">--</strong></div>
-          <div class="metric"><span data-i18n="modelState">MODEL</span><strong id="modelState">--</strong></div>
+      <section class="cut-panel summary-card" data-detail-type="telemetry">
+        <div class="panel-header clickable-header">
+          <span data-i18n="robotTelemetry">ROBOT TELEMETRY</span>
+          <button class="micro-button detail-button" data-detail-type="telemetry" type="button" data-i18n="detail">DETAIL</button>
+        </div>
+        <div class="summary-body telemetry-summary">
+          <div class="summary-row"><span data-i18n="connection">Connection</span><strong id="telemetryConnection">--</strong></div>
+          <div class="summary-row"><span data-i18n="battery">Battery</span><strong id="telemetryBattery">--</strong></div>
+          <div class="summary-row"><span data-i18n="modeShort">Mode</span><strong id="telemetryMode">--</strong></div>
+          <div class="summary-row"><span>linear_x</span><strong id="telemetryLinearX">--</strong></div>
+          <div class="summary-row"><span>angular_z</span><strong id="telemetryAngularZ">--</strong></div>
+          <div class="summary-row"><span data-i18n="controlSource">Source</span><strong id="telemetrySource" title="--">--</strong></div>
+          <div class="summary-row"><span data-i18n="targetShort">Target</span><strong id="telemetryTarget">--</strong></div>
+          <div class="summary-row"><span data-i18n="modelShort">Model</span><strong id="telemetryModel" title="--">--</strong></div>
         </div>
       </section>
 
-      <section class="cut-panel agent-panel">
-        <div class="panel-header"><span data-i18n="agentIntel">AGENT INTEL</span><strong id="agentState">--</strong></div>
-        <div class="agent-readout">
-          <label data-i18n="sceneUnderstanding">Scene Understanding</label>
-          <p id="sceneText">--</p>
-          <label data-i18n="actionPlan">Action Plan</label>
-          <pre id="agentPlan">{}</pre>
-          <div class="agent-mini">
-            <span><span data-i18n="latency">Latency</span> <strong id="agentLatency">--</strong></span>
-            <span><span data-i18n="tokens">Tokens</span> <strong id="agentTokens">--</strong></span>
-          </div>
-          <div class="radar-block" aria-label="Mini map radar">
-            <div class="radar-scope"><i></i><b id="radarDot"></b></div>
-            <div class="radar-readout">
-              <span data-i18n="miniMap">MINI MAP</span>
-              <strong id="radarState">--</strong>
-            </div>
-          </div>
-          <label data-i18n="agentLog">Agent Reasoning Log</label>
-          <ul id="agentLog" class="agent-log"></ul>
+      <section class="cut-panel summary-card" data-detail-type="agent">
+        <div class="panel-header clickable-header">
+          <span data-i18n="agentIntel">AGENT INTELLIGENCE</span>
+          <button class="micro-button detail-button" data-detail-type="agent" type="button" data-i18n="detail">DETAIL</button>
         </div>
-        <div class="agent-query">
-          <input id="agentQuery" data-i18n-placeholder="agentPlaceholder" placeholder="任务：你看到了什么？ / 帮我找水杯 / 跟着我">
-          <button data-command="AGENT_QUERY" data-i18n="send">SEND</button>
+        <div class="summary-body">
+          <div class="summary-row"><span data-i18n="status">Status</span><strong id="agentStatusSummary">--</strong></div>
+          <div class="summary-block">
+            <span data-i18n="sceneUnderstanding">Scene</span>
+            <strong id="agentSceneSummary" class="ellipsis" title="--">--</strong>
+          </div>
+          <div class="summary-block">
+            <span data-i18n="actionPlan">Plan</span>
+            <strong id="agentPlanSummary" class="ellipsis" title="--">--</strong>
+          </div>
+          <div class="summary-row"><span data-i18n="currentAction">Action</span><strong id="agentActionSummary">--</strong></div>
+          <div class="summary-row"><span data-i18n="latency">Latency</span><strong id="agentLatencySummary">--</strong></div>
+          <div class="summary-row"><span data-i18n="tokens">Tokens</span><strong id="agentTokenSummary">--</strong></div>
+        </div>
+      </section>
+
+      <section class="cut-panel summary-card" data-detail-type="sub_agents">
+        <div class="panel-header clickable-header">
+          <span data-i18n="subAgents">SUB-AGENT STATUS</span>
+          <button class="micro-button detail-button" data-detail-type="sub_agents" type="button" data-i18n="detail">DETAIL</button>
+        </div>
+        <div class="summary-body compact-list">
+          <div class="summary-row"><span>FOLLOW_AGENT</span><strong id="followAgentSummary">--</strong></div>
+          <div class="summary-row"><span>GESTURE_AGENT</span><strong id="gestureAgentSummary">--</strong></div>
+          <div class="summary-row"><span>SAFETY_AGENT</span><strong id="safetyAgentSummary">--</strong></div>
+          <div class="summary-row"><span>VLM_AGENT</span><strong id="vlmAgentSummary">--</strong></div>
+          <div class="summary-row"><span>LLM_AGENT</span><strong id="llmAgentSummary">--</strong></div>
+          <div class="summary-row"><span>MANUAL_AGENT</span><strong id="manualAgentSummary">--</strong></div>
+          <div class="summary-row"><span>DASHBOARD_AGENT</span><strong id="dashboardAgentSummary">--</strong></div>
+        </div>
+      </section>
+
+      <section class="cut-panel summary-card" data-detail-type="models">
+        <div class="panel-header clickable-header">
+          <span data-i18n="modelRuntime">MODEL RUNTIME</span>
+          <button class="micro-button detail-button" data-detail-type="models" type="button" data-i18n="detail">DETAIL</button>
+        </div>
+        <div class="summary-body compact-list">
+          <div class="summary-row"><span>YOLO</span><strong id="modelYoloSummary">--</strong></div>
+          <div class="summary-row"><span>HAND</span><strong id="modelHandSummary">--</strong></div>
+          <div class="summary-row"><span>VLM</span><strong id="modelVlmSummary">--</strong></div>
+          <div class="summary-row"><span>LLM</span><strong id="modelLlmSummary">--</strong></div>
+          <div class="summary-row"><span>AGENT</span><strong id="modelAgentSummary">--</strong></div>
+        </div>
+      </section>
+
+      <section class="cut-panel summary-card" data-detail-type="logs">
+        <div class="panel-header clickable-header">
+          <span data-i18n="eventLog">EVENT LOG</span>
+          <div class="header-tools">
+            <button class="micro-button detail-button" data-detail-type="logs" type="button" data-i18n="detail">DETAIL</button>
+          </div>
+        </div>
+        <div class="summary-body">
+          <ul id="eventSummaryList" class="summary-log-list"></ul>
         </div>
       </section>
     </aside>
 
     <section class="control-panel cut-panel">
       <div class="panel-header"><span data-i18n="manualOverride">MANUAL OVERRIDE</span><strong data-i18n="lowSpeed">LOW SPEED</strong></div>
-      <div class="control-grid">
-        <button class="danger" data-command="EMERGENCY_STOP" data-i18n="emergencyStop">EMERGENCY STOP</button>
-        <button class="sleep" data-command="SLEEP" data-i18n="sleep">SLEEP</button>
-        <button class="wake" data-command="WAKE" data-i18n="wake">WAKE</button>
-        <button data-command="START_FOLLOW" data-i18n="startFollow">START FOLLOW</button>
-        <button data-command="PAUSE_FOLLOW" data-i18n="pauseFollow">PAUSE FOLLOW</button>
-        <button data-command="FORWARD" data-i18n="forward">FORWARD</button>
-        <button data-command="TURN_LEFT" data-i18n="turnLeft">TURN LEFT</button>
-        <button data-command="STOP" data-i18n="stop">STOP</button>
-        <button data-command="TURN_RIGHT" data-i18n="turnRight">TURN RIGHT</button>
-        <button data-command="BACKWARD" data-i18n="backward">BACKWARD</button>
-        <button data-command="CLEAR_LOGS" data-i18n="clearLogs">CLEAR LOGS</button>
-      </div>
-    </section>
+      <div class="control-sections">
+        <section class="control-zone">
+          <h3 data-i18n="safetyZone">Safety Control</h3>
+          <div class="control-stack">
+            <button class="danger" data-command="EMERGENCY_STOP" data-i18n="emergencyStop">EMERGENCY STOP</button>
+            <button class="sleep" data-command="SLEEP" data-i18n="sleep">SLEEP</button>
+            <button class="wake" data-command="WAKE" data-i18n="wake">WAKE</button>
+          </div>
+        </section>
 
-    <section class="log-panel cut-panel">
-      <div class="panel-header log-header">
-        <span data-i18n="eventLog">EVENT LOG</span>
-        <div class="log-tools">
-          <button class="micro-button" id="logLockToggle" type="button" data-i18n="lockLogs">LOCK</button>
-          <button class="micro-button" id="copyLogs" type="button" data-i18n="copyLogs">COPY</button>
-          <strong data-i18n="last20">LAST 20</strong>
-        </div>
+        <section class="control-zone">
+          <h3 data-i18n="chassisZone">Chassis Control</h3>
+          <div class="cross-grid">
+            <div></div>
+            <button data-command="FORWARD" data-i18n="forward">FORWARD</button>
+            <div></div>
+            <button data-command="STRAFE_LEFT" data-i18n="strafeLeft">STRAFE LEFT</button>
+            <button data-command="STOP" data-i18n="stop">STOP</button>
+            <button data-command="STRAFE_RIGHT" data-i18n="strafeRight">STRAFE RIGHT</button>
+            <button data-command="TURN_LEFT" data-i18n="turnLeft">TURN LEFT</button>
+            <button data-command="BACKWARD" data-i18n="backward">BACKWARD</button>
+            <button data-command="TURN_RIGHT" data-i18n="turnRight">TURN RIGHT</button>
+          </div>
+        </section>
+
+        <section class="control-zone">
+          <h3 data-i18n="gimbalZone">Gimbal Control</h3>
+          <div class="cross-grid">
+            <div></div>
+            <button data-command="GIMBAL_UP" data-i18n="gimbalUp">GIMBAL UP</button>
+            <div></div>
+            <button data-command="GIMBAL_LEFT" data-i18n="gimbalLeft">GIMBAL LEFT</button>
+            <button data-command="GIMBAL_CENTER" data-i18n="gimbalCenter">GIMBAL CENTER</button>
+            <button data-command="GIMBAL_RIGHT" data-i18n="gimbalRight">GIMBAL RIGHT</button>
+            <div></div>
+            <button data-command="GIMBAL_DOWN" data-i18n="gimbalDown">GIMBAL DOWN</button>
+            <div></div>
+          </div>
+        </section>
+
+        <section class="control-zone">
+          <h3 data-i18n="modeZone">Mode & Utility</h3>
+          <div class="assist-grid">
+            <button id="startFollowButton" class="wake" data-command="START_FOLLOW" data-i18n="startFollow">START FOLLOW</button>
+            <button data-command="PAUSE_FOLLOW" data-i18n="pauseFollow">PAUSE FOLLOW</button>
+            <button data-command="AGENT_MODE" data-i18n="agentMode">AGENT MODE</button>
+            <button data-command="GESTURE_MODE" data-i18n="gestureMode">GESTURE MODE</button>
+            <button data-command="IDLE" data-i18n="idleMode">IDLE</button>
+            <button data-command="LOCK_TARGET" data-i18n="autoLock">AUTO LOCK</button>
+            <button data-command="SNAPSHOT" data-i18n="snapshot">SNAPSHOT</button>
+            <button data-command="START_RECORD" data-i18n="startRecord">START RECORD</button>
+            <button data-command="STOP_RECORD" data-i18n="stopRecord">STOP RECORD</button>
+            <button data-command="CLEAR_LOGS" data-i18n="clearLogs">CLEAR LOGS</button>
+            <button data-command="RESET_TARGET" data-i18n="resetTarget">RESET TARGET</button>
+            <button data-command="RECONNECT_ROBOT" data-i18n="reconnectRobot">RECONNECT</button>
+          </div>
+        </section>
       </div>
-      <div class="log-copy-hint" id="logCopyHint">--</div>
-      <ul id="eventLog"></ul>
     </section>
   </main>
 
@@ -154,36 +225,25 @@
         </aside>
       </div>
       <div class="settings-actions">
-        <button id="settingsReload" type="button" data-i18n="reload">RELOAD</button>
+        <button id="settingsReload" type="button" data-i18n="refresh">REFRESH</button>
         <button id="settingsSave" type="button" data-i18n="saveSettings">SAVE SETTINGS</button>
       </div>
     </section>
   </div>
 
-  <div class="modal-backdrop" id="robotDetailsModal" aria-hidden="true">
-    <section class="robot-details-modal cut-panel" role="dialog" aria-modal="true">
+  <div class="modal-backdrop" id="detailModal" aria-hidden="true">
+    <section class="detail-modal cut-panel" role="dialog" aria-modal="true">
       <div class="panel-header">
-        <span data-i18n="vehicleDetails">VEHICLE DETAILS</span>
-        <button class="micro-button" id="robotDetailsClose" type="button" data-i18n="close">CLOSE</button>
+        <span id="detailModalTitle">Detail</span>
+        <div class="header-tools">
+          <select id="detailFilter" class="mini-select"></select>
+          <button class="micro-button" id="detailRefresh" type="button" data-i18n="refresh">REFRESH</button>
+          <button class="micro-button" id="detailCopy" type="button" data-i18n="copy">COPY</button>
+          <button class="micro-button" id="detailClear" type="button" data-i18n="clear">CLEAR</button>
+          <button class="micro-button" id="detailClose" type="button" data-i18n="close">CLOSE</button>
+        </div>
       </div>
-      <div class="robot-detail-grid">
-        <div class="detail-card"><span data-i18n="connection">Connection</span><strong id="detailConnected">--</strong></div>
-        <div class="detail-card"><span data-i18n="robotIp">Robot IP</span><strong id="detailRobotIp">--</strong></div>
-        <div class="detail-card"><span data-i18n="battery">BATTERY</span><strong id="detailBattery">--</strong></div>
-        <div class="detail-card"><span data-i18n="modeShort">MODE</span><strong id="detailMode">--</strong></div>
-        <div class="detail-card"><span>Camera Topic</span><strong id="detailCameraTopic">--</strong></div>
-        <div class="detail-card"><span>CmdVel Topic</span><strong id="detailCmdVelTopic">--</strong></div>
-        <div class="detail-card"><span>Camera</span><strong id="detailCameraStatus">--</strong></div>
-        <div class="detail-card"><span>LLM</span><strong id="detailLlmStatus">--</strong></div>
-        <div class="detail-card"><span>FPS</span><strong id="detailFps">--</strong></div>
-        <div class="detail-card"><span>Linear X</span><strong id="detailLinearX">--</strong></div>
-        <div class="detail-card"><span>Angular Z</span><strong id="detailAngularZ">--</strong></div>
-        <div class="detail-card"><span data-i18n="targetShort">TARGET</span><strong id="detailTarget">--</strong></div>
-      </div>
-      <div class="robot-detail-raw">
-        <h3 data-i18n="coreData">Core Data</h3>
-        <pre id="robotDetailsRaw">{}</pre>
-      </div>
+      <div class="detail-body" id="detailBody"></div>
     </section>
   </div>
 
