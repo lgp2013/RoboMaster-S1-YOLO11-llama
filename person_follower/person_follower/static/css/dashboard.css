@@ -64,7 +64,7 @@ h1 { margin: 0; font-size: 18px; letter-spacing: 0.08em; }
   min-height: calc(100dvh - 79px);
   height: calc(100dvh - 79px);
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
+  grid-template-columns: 1.28fr 1fr;
   grid-template-rows: 1fr auto;
   gap: 14px;
   padding: 14px;
