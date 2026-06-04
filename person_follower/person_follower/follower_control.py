@@ -104,7 +104,7 @@ class PersonFollowerController:
 
         if abs(error_x) > self.config.gimbal_deadzone_px:
             normalized_error_x = error_x / max(1.0, frame_width / 2.0)
-            yaw_speed = -self.config.gimbal_yaw_gain * normalized_error_x
+            yaw_speed = self.config.gimbal_yaw_gain * normalized_error_x
             yaw_speed = clamp(yaw_speed, -self.config.max_gimbal_yaw_speed, self.config.max_gimbal_yaw_speed)
             if 0 < abs(yaw_speed) < self.config.min_gimbal_speed:
                 yaw_speed = self.config.min_gimbal_speed if yaw_speed > 0 else -self.config.min_gimbal_speed
