@@ -1,6 +1,7 @@
 const i18n = {
   en: {
     langButton: "中文",
+    appTitle: "RoboMaster Tactical AI Console",
     liveFeed: "LIVE OPTICAL FEED",
     modeShort: "MODE",
     gestureShort: "GESTURE",
@@ -73,6 +74,7 @@ const i18n = {
   },
   zh: {
     langButton: "EN",
+    appTitle: "机器人",
     liveFeed: "实时光学画面",
     modeShort: "模式",
     gestureShort: "手势",
@@ -170,6 +172,7 @@ function localizeValue(value) {
 
 function applyLanguage() {
   document.documentElement.lang = state.lang === "zh" ? "zh-CN" : "en-US";
+  document.title = t("appTitle");
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });

@@ -13,7 +13,7 @@ import cv2
 from flask import Flask, Response, jsonify, render_template, request
 
 
-DASHBOARD_VERSION = "tactical-console-audit-20260604"
+DASHBOARD_VERSION = "tactical-camera-title-fix-20260604"
 
 
 class DashboardServer:

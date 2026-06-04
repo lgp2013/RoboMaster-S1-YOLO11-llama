@@ -57,6 +57,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(5, 13, 10, 0.92);
@@ -70,24 +71,28 @@ body {
 
 h1 {
   margin: 3px 0 0;
-  font-size: clamp(18px, 1.8vw, 30px);
+  font-size: clamp(18px, 1.55vw, 28px);
   font-weight: 800;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .top-status {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .status-pill, .clock {
-  min-width: 78px;
+  min-width: 66px;
   height: 38px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 9px;
+  gap: 6px;
+  padding: 0 7px;
   background: rgba(19, 34, 30, 0.86);
   border: 1px solid var(--line);
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
@@ -105,9 +110,17 @@ h1 {
   transform: translateY(-1px);
 }
 
-.status-pill span:not(.lamp) { color: var(--muted); font-size: 11px; }
+.status-pill span:not(.lamp) {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
 .status-pill strong, .clock { color: var(--cyan); font-weight: 800; }
-.status-pill strong { font-size: 12px; }
+.status-pill strong {
+  font-size: 12px;
+  white-space: nowrap;
+  word-break: keep-all;
+}
 
 .lamp {
   width: 9px;

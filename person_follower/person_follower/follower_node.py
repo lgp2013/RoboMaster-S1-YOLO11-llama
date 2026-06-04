@@ -63,8 +63,6 @@ class PersonFollowerNode(Node):
         self.gesture_state_pub = self.create_publisher(String, "/gesture/state", 10)
         self.gesture_command_pub = self.create_publisher(String, "/gesture/command", 10)
         self.gesture_debug_pub = self.create_publisher(Image, "/gesture/debug_image", 5)
-        self.image_sub = self.create_subscription(Image, self.camera_topic, self.image_callback, 10)
-        self.control_timer = self.create_timer(1.0 / self.control_rate_hz, self.control_loop)
 
         self.gesture_detector = None
         if self.gesture_enabled:
@@ -162,6 +160,9 @@ class PersonFollowerNode(Node):
         self.get_logger().info("Person follower stage2 node started")
         self.get_logger().info("camera_topic=%s cmd_vel_topic=%s" % (self.camera_topic, self.cmd_vel_topic))
         self.battery_sub = self.create_subscription(BatteryState, "/battery", self.battery_callback, 10)
+        # 所有状态字段初始化完成后再订阅图像，避免回调抢先触发时访问未创建的属性。
+        self.image_sub = self.create_subscription(Image, self.camera_topic, self.image_callback, 10)
+        self.control_timer = self.create_timer(1.0 / self.control_rate_hz, self.control_loop)
         self.log_event("system boot: tactical dashboard online")
 
     def _declare_parameters(self) -> None:
@@ -357,7 +358,7 @@ class PersonFollowerNode(Node):
     def core_data(self) -> Dict[str, object]:
         """设置弹窗展示的核心运行数据。"""
         camera_online = (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False
-        yolo_status = "online" if self.yolo is not None else "offline"
+        yolo_status = "online" if self.detector is not None else "offline"
         hand_status = "online" if self.gesture_enabled and self.gesture_detector is not None else "standby"
         vlm_status = "online" if self.vision_agent.enabled and not self.latest_agent_error else "standby"
         llm_status = "online" if self.agent_enabled and not self.latest_agent_error else "standby"
@@ -686,7 +687,7 @@ class PersonFollowerNode(Node):
             "cooldown_remaining": self.latest_gesture_state.get("cooldown_remaining", 0.0),
         }
         camera_online = (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False
-        yolo_status = "online" if self.yolo is not None else "offline"
+        yolo_status = "online" if self.detector is not None else "offline"
         hand_status = "online" if self.gesture_enabled and self.gesture_detector is not None else "standby"
         vlm_status = "online" if self.vision_agent.enabled and not self.latest_agent_error else "standby"
         llm_status = "online" if self.agent_enabled and not self.latest_agent_error else "standby"
