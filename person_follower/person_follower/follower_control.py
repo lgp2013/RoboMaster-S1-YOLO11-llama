@@ -147,7 +147,7 @@ class SafetyGuard:
             return safe, "stop: command timeout"
 
         safe.linear.x = clamp(cmd.linear.x, -self.max_linear_speed, self.max_linear_speed)
-        safe.angular.z = clamp(cmd.angular.z, -self.config.max_angular_speed, self.config.max_angular_speed)
+        safe.angular.z = clamp(cmd.angular.z, -self.max_angular_speed, self.max_angular_speed)
 
         # S1 跟随只需要前后和原地旋转，禁止横移和其他轴。
         safe.linear.y = 0.0
