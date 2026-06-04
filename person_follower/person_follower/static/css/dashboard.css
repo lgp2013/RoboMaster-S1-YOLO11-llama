@@ -44,11 +44,16 @@ h1 { margin: 0; font-size: 18px; letter-spacing: 0.08em; }
 .top-status { display: flex; align-items: center; gap: 10px; }
 .status-pill {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 10px; border-radius: 999px;
-  background: rgba(120, 240, 228, 0.08);
-  border: 1px solid rgba(120, 240, 228, 0.25);
-  font-size: 12px;
+  padding: 0 12px;
+  min-height: 38px;
+  background: linear-gradient(180deg, rgba(29, 53, 45, 0.96), rgba(12, 26, 22, 0.96));
+  border: 1px solid rgba(120, 240, 228, 0.32);
+  font-size: 13px;
+  font-weight: 700;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
 }
+.status-pill:hover { transform: translateY(-1px); border-color: var(--cyan); box-shadow: 0 0 24px rgba(120, 240, 228, 0.14); }
 .status-pill strong { color: var(--cyan); font-weight: 800; }
 .lamp { width: 8px; height: 8px; border-radius: 50%; background: #2a3a36; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
 .lamp.on { background: #3af3b5; box-shadow: 0 0 10px #3af3b5; }
@@ -224,6 +229,7 @@ button.wake { background: linear-gradient(180deg, #2f6c3b, #102515); border-colo
   padding: 0 12px;
   font-size: 13px;
   font-weight: 700;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 .top-status .lang-toggle { min-width: 56px; }
 .top-link {
