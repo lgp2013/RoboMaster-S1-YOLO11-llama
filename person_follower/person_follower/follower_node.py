@@ -784,7 +784,7 @@ class PersonFollowerNode(Node):
                 self.gesture_debug_pub.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
 
             if self.dashboard is not None:
-                self.dashboard.update(annotated, self._status_dict())
+                self.dashboard.update(frame, annotated, self._status_dict())
         except Exception as exc:
             self.publish_event("SYSTEM", "image processing failed: %s" % exc, level="error", event_type="vision")
             self.publish_stop("image processing exception")

@@ -33,7 +33,9 @@ class DashboardServer:
         self.settings_callback = settings_callback
         self.media_callback = media_callback
         self.lock = threading.Lock()
-        self.latest_frame = None
+        self.latest_raw_frame = None
+        self.latest_annotated_frame = None
+        self.preview_mode = "raw"
         self.status: Dict[str, object] = {}
 
         self.app = Flask(
@@ -103,6 +105,22 @@ class DashboardServer:
         @self.app.route("/api/dashboard/version")
         def api_dashboard_version():
             return jsonify(self._ok(dict(self.version_info)))
+
+        @self.app.route("/api/dashboard/preview_mode", methods=["GET", "POST"])
+        def api_dashboard_preview_mode():
+            try:
+                if request.method == "POST":
+                    payload = request.get_json(silent=True) or {}
+                    mode = str(payload.get("mode", "raw")).strip().lower()
+                    if mode not in ("raw", "annotated"):
+                        return jsonify(self._error("invalid preview mode")), 400
+                    with self.lock:
+                        self.preview_mode = mode
+                with self.lock:
+                    mode = self.preview_mode
+                return jsonify(self._ok({"mode": mode}))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
 
         @self.app.route("/api/status")
         def api_status():
@@ -229,10 +247,11 @@ class DashboardServer:
         def video_feed():
             return Response(self._frame_generator(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-    def update(self, frame, status: Dict[str, object]) -> None:
+    def update(self, raw_frame, annotated_frame, status: Dict[str, object]) -> None:
         """更新 Dashboard 数据。传入 frame 会被复制，避免跨线程修改。"""
         with self.lock:
-            self.latest_frame = frame.copy() if frame is not None else None
+            self.latest_raw_frame = raw_frame.copy() if raw_frame is not None else None
+            self.latest_annotated_frame = annotated_frame.copy() if annotated_frame is not None else None
             self.status = dict(status)
 
     def _merge_callback_status(self, result: Dict[str, object]) -> None:
@@ -260,7 +279,8 @@ class DashboardServer:
     def _frame_generator(self):
         while True:
             with self.lock:
-                frame = None if self.latest_frame is None else self.latest_frame.copy()
+                source = self.latest_raw_frame if self.preview_mode == "raw" else self.latest_annotated_frame
+                frame = None if source is None else source.copy()
             if frame is None:
                 time.sleep(0.05)
                 continue
