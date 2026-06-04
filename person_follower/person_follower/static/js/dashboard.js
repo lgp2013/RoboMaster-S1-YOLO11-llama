@@ -504,58 +504,83 @@ function renderLogDetail(body, filter, data) {
 }
 
 function renderSubAgentDetail(data) {
-  // Render per-agent input, output, action and error as separate blocks.
+  // Render per-agent status and info as key-value pairs.
   const items = data.items || {};
   const followMeta = data.follow_meta || {};
-  const cards = Object.entries(items).map(([name, info]) => `
+  
+  // Helper to flatten object to key-value pairs
+  function flattenObject(obj, prefix = "") {
+    const result = [];
+    Object.entries(obj || {}).forEach(([key, value]) => {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        result.push(...flattenObject(value, fullKey));
+      } else if (Array.isArray(value)) {
+        result.push({ key: fullKey, value: value.join(", ") });
+      } else {
+        result.push({ key: fullKey, value: String(value ?? "--") });
+      }
+    });
+    return result;
+  }
+  
+  const cards = Object.entries(items).map(([name, info]) => {
+    const flattened = flattenObject(info, name);
+    return flattened.map(({key, value}) => `
+      <div class="detail-item">
+        <span>${escapeHtml(key)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>
+    `).join("");
+  });
+  
+  // Add follow_meta as key-value pairs
+  const metaFlattened = flattenObject(followMeta, "FOLLOW_META");
+  cards.push(metaFlattened.map(({key, value}) => `
     <div class="detail-item">
-      <span>${escapeHtml(name)}</span>
-      <strong>${escapeHtml(String(info.status || "--"))}</strong>
-      <p>${escapeHtml(String(info.message || info.last_event || "--"))}</p>
-      <div class="detail-subsection">
-        <span>INPUT</span>
-        <pre>${escapeHtml(JSON.stringify(info.input || {}, null, 2))}</pre>
-      </div>
-      <div class="detail-subsection">
-        <span>OUTPUT</span>
-        <pre>${escapeHtml(JSON.stringify(info.output || {}, null, 2))}</pre>
-      </div>
-      <div class="detail-subsection">
-        <span>ACTION</span>
-        <strong>${escapeHtml(String(info.current_action || "--"))}</strong>
-      </div>
-      <div class="detail-subsection">
-        <span>LAST ERROR</span>
-        <strong>${escapeHtml(String(info.last_error || "--"))}</strong>
-      </div>
-      <div class="detail-subsection">
-        <span>UPDATED</span>
-        <strong>${escapeHtml(String(info.last_update || "--"))}</strong>
-      </div>
-      <pre>${escapeHtml(JSON.stringify(info, null, 2))}</pre>
+      <span>${escapeHtml(key)}</span>
+      <strong>${escapeHtml(value)}</strong>
     </div>
-  `);
-  cards.push(`
-    <div class="detail-item">
-      <span>FOLLOW_META</span>
-      <pre>${escapeHtml(JSON.stringify(followMeta, null, 2))}</pre>
-    </div>
-  `);
+  `).join(""));
+  
   return `<div class="detail-grid">${cards.join("")}</div>`;
 }
 
-function renderKeyValueDetail(data) {
-  const cards = Object.entries(data || {}).map(([key, value]) => {
-    const content = value && typeof value === "object"
-      ? `<pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre>`
-      : `<strong>${escapeHtml(String(value))}</strong>`;
-    return `
-      <div class="detail-item">
-        <span>${escapeHtml(key)}</span>
-        ${content}
-      </div>
-    `;
-  });
+function renderKeyValueDetail(data, prefix = "") {
+  const items = [];
+  
+  function flatten(obj, parentKey = "") {
+    Object.entries(obj || {}).forEach(([key, value]) => {
+      const fullKey = parentKey ? `${parentKey}.${key}` : key;
+      
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        // 递归展开嵌套对象
+        flatten(value, fullKey);
+      } else if (Array.isArray(value)) {
+        // 数组显示为逗号分隔的字符串
+        items.push({
+          key: fullKey,
+          value: value.join(", ")
+        });
+      } else {
+        // 基本类型直接显示
+        items.push({
+          key: fullKey,
+          value: String(value ?? "--")
+        });
+      }
+    });
+  }
+  
+  flatten(data);
+  
+  const cards = items.map(({key, value}) => `
+    <div class="detail-item">
+      <span>${escapeHtml(key)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `);
+  
   return `<div class="detail-grid">${cards.join("")}</div>`;
 }
 
