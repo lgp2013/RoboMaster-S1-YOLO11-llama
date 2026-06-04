@@ -33,7 +33,11 @@
     <section class="video-panel cut-panel">
       <div class="panel-header">
         <span data-i18n="liveFeed">LIVE OPTICAL FEED</span>
-        <strong id="videoBadge">STANDBY</strong>
+        <div class="header-tools">
+          <button class="micro-button preview-toggle active" id="previewRawToggle" type="button" data-preview-mode="raw" data-i18n="previewRaw">RAW</button>
+          <button class="micro-button preview-toggle" id="previewAiToggle" type="button" data-preview-mode="annotated" data-i18n="previewAi">AI</button>
+          <strong id="videoBadge">STANDBY</strong>
+        </div>
       </div>
       <div class="video-frame">
         <img id="videoFeed" src="/video_feed" alt="RoboMaster camera feed">

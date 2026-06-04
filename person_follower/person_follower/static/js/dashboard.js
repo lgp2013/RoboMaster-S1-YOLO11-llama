@@ -76,6 +76,8 @@ const I18N = {
     mediaPage: "\u5a92\u4f53\u9875",
     mediaManager: "\u5a92\u4f53\u7ba1\u7406",
     openMedia: "\u6253\u5f00",
+    previewRaw: "\u539f\u59cb",
+    previewAi: "\u7b97\u6cd5",
     snapshotCount: "\u622a\u56fe\u6570",
     videoCount: "\u5f55\u50cf\u6570",
     recordingState: "\u5f55\u50cf\u72b6\u6001",
@@ -178,6 +180,8 @@ const I18N = {
     mediaPage: "MEDIA",
     mediaManager: "MEDIA MANAGER",
     openMedia: "OPEN",
+    previewRaw: "RAW",
+    previewAi: "AI",
     snapshotCount: "Snapshots",
     videoCount: "Videos",
     recordingState: "Recording",
@@ -219,6 +223,7 @@ const state = {
   lastStatus: {},
   currentDetailType: "",
   currentDetailData: {},
+  previewMode: "raw",
 };
 
 function t(key) {
@@ -286,6 +291,29 @@ function commandVectorText(cmd = {}) {
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   return response.json();
+}
+
+function renderPreviewMode() {
+  const rawButton = document.getElementById("previewRawToggle");
+  const aiButton = document.getElementById("previewAiToggle");
+  rawButton?.classList.toggle("active", state.previewMode === "raw");
+  aiButton?.classList.toggle("active", state.previewMode === "annotated");
+}
+
+async function loadPreviewMode() {
+  const payload = await fetchJson("/api/dashboard/preview_mode");
+  state.previewMode = payload?.data?.mode || "raw";
+  renderPreviewMode();
+}
+
+async function setPreviewMode(mode) {
+  const payload = await fetchJson("/api/dashboard/preview_mode", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  state.previewMode = payload?.data?.mode || mode;
+  renderPreviewMode();
 }
 
 async function sendControl(command, extra = {}) {
@@ -753,6 +781,10 @@ function bindCommands() {
     button.addEventListener("click", () => sendControl(button.dataset.command));
   });
 
+  document.querySelectorAll("[data-preview-mode]").forEach((button) => {
+    button.addEventListener("click", () => setPreviewMode(button.dataset.previewMode));
+  });
+
   document.getElementById("videoFeed")?.addEventListener("click", (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
@@ -822,6 +854,7 @@ async function boot() {
   document.getElementById("langToggle")?.addEventListener("click", toggleLanguage);
   startClock();
   window.setInterval(refreshStatus, 1000);
+  await loadPreviewMode();
   await refreshStatus();
   await loadSettings();
 }

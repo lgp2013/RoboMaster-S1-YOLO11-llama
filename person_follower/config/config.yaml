@@ -26,9 +26,10 @@ person_follower:
     min_angular_speed: 0.10
 
     # Distance is estimated from bbox height ratio, not real meters.
-    target_distance_m: 1.5
-    target_bbox_height_ratio: 0.45
-    bbox_height_tolerance: 0.08
+    # target_bbox_height_ratio ~ 0.6 means person is about 1 meter away
+    target_distance_m: 1.0
+    target_bbox_height_ratio: 0.60
+    bbox_height_tolerance: 0.05
 
     # Safety.
     lost_target_timeout_sec: 3.0
@@ -36,6 +37,14 @@ person_follower:
     image_timeout_sec: 5.0
     enable_backward: true
     enable_auto_move: true
+
+    # Gimbal auto-tracking parameters (aggressive tracking)
+    gimbal_yaw_gain: 3.0           # Higher gain for faster yaw response
+    gimbal_pitch_gain: 2.5         # Higher gain for faster pitch response
+    max_gimbal_yaw_speed: 3.0      # Maximum yaw speed (rad/s)
+    max_gimbal_pitch_speed: 2.0    # Maximum pitch speed (rad/s)
+    min_gimbal_speed: 0.05         # Minimum gimbal speed to overcome friction
+    gimbal_deadzone_px: 10         # Small deadzone for responsive tracking
 
     # MediaPipe Hands gesture recognition.
     gesture:

@@ -326,6 +326,13 @@ class PersonFollowerNode(Node):
             "agent.forward_speed": 0.12,
             "agent.turn_speed": 0.45,
             "agent.action_duration_sec": 0.8,
+            # Gimbal auto-tracking parameters
+            "gimbal_yaw_gain": 3.0,
+            "gimbal_pitch_gain": 2.5,
+            "max_gimbal_yaw_speed": 3.0,
+            "max_gimbal_pitch_speed": 2.0,
+            "min_gimbal_speed": 0.05,
+            "gimbal_deadzone_px": 10,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
@@ -343,6 +350,13 @@ class PersonFollowerNode(Node):
             bbox_height_tolerance=float(self.get_parameter("bbox_height_tolerance").value),
             enable_backward=bool(self.get_parameter("enable_backward").value),
             enable_auto_move=bool(self.get_parameter("enable_auto_move").value),
+            # Gimbal control parameters
+            gimbal_yaw_gain=float(self.get_parameter("gimbal_yaw_gain").value),
+            gimbal_pitch_gain=float(self.get_parameter("gimbal_pitch_gain").value),
+            max_gimbal_yaw_speed=float(self.get_parameter("max_gimbal_yaw_speed").value),
+            max_gimbal_pitch_speed=float(self.get_parameter("max_gimbal_pitch_speed").value),
+            min_gimbal_speed=float(self.get_parameter("min_gimbal_speed").value),
+            gimbal_deadzone_px=int(self.get_parameter("gimbal_deadzone_px").value),
         )
 
     def _gesture_actions(self) -> Dict[str, str]:
@@ -996,10 +1010,13 @@ class PersonFollowerNode(Node):
         height, width = frame.shape[:2]
         cmd, reason, bbox_height_ratio = self.controller.compute_cmd(target, width, height)
         safe_cmd, safety_reason = self.safety_guard.filter_cmd(cmd, True, image_age)
+        # 计算云台控制命令（自动调整俯仰和偏航）
+        gimbal_cmd, gimbal_reason = self.controller.compute_gimbal_cmd(target, width, height)
+        safe_gimbal_cmd = self._clamp_gimbal_cmd(gimbal_cmd)
         self.latest_bbox_height_ratio = bbox_height_ratio
         self.lock_state = "LOCKED"
         self.lock_message = "Locked target tracked"
-        self._publish_cmd(safe_cmd, cmd, Twist(), Twist(), reason, safety_reason)
+        self._publish_cmd(safe_cmd, cmd, safe_gimbal_cmd, gimbal_cmd, f"{reason} | {gimbal_reason}", safety_reason)
 
     def _publish_cmd(
         self,
