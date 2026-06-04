@@ -16,6 +16,7 @@
 html, body { height: 100%; }
 body {
   margin: 0;
+  min-height: 100dvh;
   color: var(--text);
   background:
     linear-gradient(rgba(120, 240, 228, 0.035) 1px, transparent 1px),
@@ -39,14 +40,16 @@ body {
   border-bottom: 1px solid var(--line);
   background: rgba(5, 13, 10, 0.92);
 }
+.brand-block { min-width: 0; flex: 1 1 420px; }
 .brand-kicker { color: var(--amber); font-size: 11px; font-weight: 700; }
 h1 { margin: 3px 0 0; font-size: clamp(17px, 1.45vw, 26px); font-weight: 800; text-transform: uppercase; }
-.top-status { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.top-status { display: flex; flex: 1 1 560px; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .status-pill, .clock {
   min-width: 76px; height: 38px; display: flex; align-items: center; gap: 6px; padding: 0 8px;
   background: rgba(19, 34, 30, 0.86); border: 1px solid var(--line);
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
+.status-pill { flex: 0 1 auto; }
 .status-pill span:not(.lamp) { color: var(--muted); font-size: 10px; white-space: nowrap; }
 .status-pill strong, .clock { color: var(--cyan); font-weight: 800; }
 .status-button, button { color: var(--text); font: inherit; cursor: pointer; }
@@ -55,18 +58,22 @@ h1 { margin: 3px 0 0; font-size: clamp(17px, 1.45vw, 26px); font-weight: 800; te
 .lamp.standby { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
 
 .console-shell {
-  min-height: calc(100vh - 79px);
+  min-height: calc(100dvh - 79px);
+  height: calc(100dvh - 79px);
   display: grid;
-  grid-template-columns: minmax(700px, 1fr) 430px;
-  grid-template-rows: minmax(430px, 1fr) auto;
+  grid-template-columns: minmax(0, 1.8fr) minmax(360px, 31vw);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 14px;
   padding: 14px;
+  align-items: stretch;
+  overflow: hidden;
 }
 .cut-panel {
   min-height: 0; background: var(--panel); border: 1px solid var(--line);
   box-shadow: 0 18px 38px var(--shadow), inset 0 0 0 1px rgba(120, 240, 228, 0.04);
   clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
 }
+.video-panel { display: flex; flex-direction: column; min-height: 0; }
 .panel-header {
   height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px;
   border-bottom: 1px solid var(--line);
@@ -76,7 +83,7 @@ h1 { margin: 3px 0 0; font-size: clamp(17px, 1.45vw, 26px); font-weight: 800; te
 .clickable-header { cursor: pointer; }
 .header-tools { display: flex; align-items: center; gap: 8px; }
 
-.video-frame { position: relative; height: calc(100% - 42px); overflow: hidden; background: #020504; }
+.video-frame { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: #020504; }
 .video-frame img { width: 100%; height: 100%; object-fit: contain; display: block; cursor: crosshair; }
 .hud-grid, .crosshair, .lock-reticle, .hud-top-left, .hud-bottom-right { pointer-events: none; position: absolute; }
 .hud-grid {
@@ -103,9 +110,9 @@ h1 { margin: 3px 0 0; font-size: clamp(17px, 1.45vw, 26px); font-weight: 800; te
 .hud-top-left strong, .hud-bottom-right strong { color: var(--cyan); }
 .hint-line { color: var(--amber); }
 
-.right-stack { display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); gap: 10px; min-height: 0; }
-.summary-card { overflow: hidden; }
-.summary-body { height: calc(100% - 42px); padding: 10px 12px; overflow: hidden; }
+.right-stack { display: grid; grid-template-rows: repeat(5, minmax(120px, 1fr)); gap: 10px; min-height: 0; max-height: 100%; overflow: hidden; }
+.summary-card { overflow: hidden; min-height: 0; }
+.summary-body { height: calc(100% - 42px); min-height: 0; padding: 10px 12px; overflow: auto; }
 .summary-row, .summary-block {
   display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
   min-height: 30px; padding: 6px 0; border-bottom: 1px solid rgba(120, 240, 228, 0.08);
@@ -118,9 +125,9 @@ h1 { margin: 3px 0 0; font-size: clamp(17px, 1.45vw, 26px); font-weight: 800; te
 .summary-log-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .summary-log-list li { margin-bottom: 6px; }
 
-.control-panel { grid-column: 1 / span 2; }
+.control-panel { grid-column: 1 / span 2; min-height: 0; }
 .control-sections { padding: 12px; display: grid; grid-template-columns: 1fr 1.2fr 1.2fr 1.5fr; gap: 12px; }
-.control-zone { padding: 10px; background: rgba(5, 13, 10, 0.48); border: 1px solid rgba(120, 240, 228, 0.14); }
+.control-zone { padding: 10px; min-width: 0; background: rgba(5, 13, 10, 0.48); border: 1px solid rgba(120, 240, 228, 0.14); }
 .control-zone h3 { margin: 0 0 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; }
 .control-stack, .assist-grid { display: grid; gap: 10px; }
 .assist-grid { grid-template-columns: 1fr 1fr; }
@@ -153,6 +160,8 @@ button.wake { background: linear-gradient(180deg, #2f6c3b, #102515); border-colo
 .detail-item { padding: 10px; background: var(--panel-2); border: 1px solid rgba(120, 240, 228, 0.16); }
 .detail-item span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; font-weight: 800; }
 .detail-item strong, .detail-item pre, .detail-item p { margin: 0; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.detail-subsection { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(120, 240, 228, 0.12); }
+.detail-subsection span { margin-bottom: 4px; }
 .detail-log-list { margin: 0; padding-left: 18px; line-height: 1.5; }
 .detail-log-list li { margin-bottom: 6px; }
 .mini-select { min-height: 28px; background: rgba(3, 9, 7, 0.88); color: var(--text); border: 1px solid var(--line); }
@@ -165,13 +174,15 @@ input { width: 100%; min-width: 0; background: rgba(3, 9, 7, 0.88); border: 1px 
 .settings-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 0 14px 14px; }
 
 @media (max-width: 1280px) {
-  .console-shell { grid-template-columns: 1fr; grid-template-rows: 540px auto auto; }
+  .console-shell { height: auto; min-height: calc(100dvh - 79px); grid-template-columns: 1fr; grid-template-rows: minmax(420px, 62vh) auto auto; overflow: visible; }
   .right-stack, .control-panel { grid-column: 1; }
   .control-panel { grid-column: 1; }
   .control-sections { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 900px) {
   .topbar { flex-direction: column; align-items: flex-start; }
+  .top-status { width: 100%; justify-content: flex-start; }
   .right-stack, .control-sections, .settings-body, .settings-form, .detail-grid { grid-template-columns: 1fr; }
+  .right-stack { grid-template-rows: repeat(5, minmax(150px, auto)); }
   .detail-modal { width: 92vw; height: 80vh; }
 }

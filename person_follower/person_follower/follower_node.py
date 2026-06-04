@@ -596,6 +596,12 @@ class PersonFollowerNode(Node):
             return self._failure("SETTINGS", "invalid speed setting: %s" % exc)
 
         self.publish_event("SYSTEM", "settings updated from dashboard", event_type="settings")
+        # 汇总每个子智能体的摘要输入/输出，供右侧卡片和详情弹窗共用。
+        now_text = time.strftime("%H:%M:%S")
+        latest_plan = dict(self.robot_executor.last_plan)
+        latest_plan_action = str(latest_plan.get("action", "STOP"))
+        gesture_state = dict(self.latest_gesture_state)
+        gesture_output = gesture_state.get("stable_gesture", "none")
         return {
             "ok": True,
             "success": True,
@@ -1195,51 +1201,132 @@ class PersonFollowerNode(Node):
                 "status": self.lock_state if self.follow_requested or self.lock_state not in ("NONE", "") else "READY",
                 "enabled": True,
                 "last_event": self.lock_message,
-                "last_update": time.strftime("%H:%M:%S"),
+                "last_update": now_text,
                 "lock_state": self.lock_state,
                 "message": self.lock_message,
+                "input": {
+                    "people_count": len(self.latest_people),
+                    "candidate_count": self.candidate_count,
+                    "locked_target_id": self.locked_target_id or None,
+                },
+                "output": {
+                    "follow_enabled": self.follow_requested,
+                    "follow_active": self.gesture_controller.mode == ControlMode.FOLLOW and self.follow_requested,
+                    "current_target": "person" if self.latest_target is not None else "none",
+                },
+                "current_action": "FOLLOW" if self.follow_requested else "SCAN",
+                "last_error": "target lost" if self.lock_state == "LOST" else "",
             },
             "GESTURE_AGENT": {
-                "status": "online" if self.gesture_enabled and self.gesture_detector is not None else "standby",
+                "status": "ONLINE" if self.gesture_enabled and self.gesture_detector is not None else "IDLE",
                 "enabled": self.gesture_enabled,
-                "last_event": self.latest_gesture_state.get("stable_gesture", "none"),
-                "last_update": time.strftime("%H:%M:%S"),
-                "message": self.latest_gesture_state.get("stable_gesture", "none"),
+                "last_event": gesture_output,
+                "last_update": now_text,
+                "message": gesture_output,
+                "input": {
+                    "candidate": gesture_state.get("candidate", "none"),
+                    "candidate_count": gesture_state.get("candidate_count", 0),
+                    "cooldown_remaining": gesture_state.get("cooldown_remaining", 0.0),
+                },
+                "output": {
+                    "stable_gesture": gesture_output,
+                    "command_mode": str(self.gesture_controller.mode),
+                },
+                "current_action": gesture_output,
+                "last_error": "",
             },
             "VLM_AGENT": {
-                "status": "online" if self.vision_agent.enabled else "standby",
+                "status": "ONLINE" if self.vision_agent.enabled else "STANDBY",
                 "enabled": self.vision_agent.enabled,
                 "last_event": self.latest_vision_description or "No VLM description yet",
-                "last_update": time.strftime("%H:%M:%S"),
+                "last_update": now_text,
                 "message": self.latest_vision_description or "No VLM description yet",
+                "input": {
+                    "scene_enabled": self.vision_agent.enabled,
+                    "camera_online": (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False,
+                },
+                "output": {
+                    "scene_text": self.latest_scene.get("description", ""),
+                    "vision_description": self.latest_vision_description,
+                },
+                "current_action": "DESCRIBE_SCENE",
+                "last_error": self.latest_agent_error if self.vision_agent.enabled else "",
             },
             "LLM_AGENT": {
-                "status": "thinking" if self.agent_job_running else ("online" if self.agent_enabled else "standby"),
+                "status": "THINKING" if self.agent_job_running else ("ONLINE" if self.agent_enabled else "STANDBY"),
                 "enabled": self.agent_enabled,
-                "last_event": str(self.robot_executor.last_plan.get("action", "STOP")),
-                "last_update": time.strftime("%H:%M:%S"),
-                "message": str(self.robot_executor.last_plan.get("action", "STOP")),
+                "last_event": latest_plan_action,
+                "last_update": now_text,
+                "message": latest_plan_action,
+                "input": {
+                    "user_request": self.user_request,
+                    "scene_summary": self.latest_scene.get("description", ""),
+                    "current_source": self.current_agent_source,
+                },
+                "output": {
+                    "last_plan": latest_plan,
+                    "last_tokens": dict(self.robot_executor.last_tokens),
+                    "latency_ms": round(self.robot_executor.last_latency_ms, 1),
+                },
+                "current_action": latest_plan_action,
+                "last_error": self.latest_agent_error if self.agent_enabled else "",
             },
             "SAFETY_AGENT": {
-                "status": "online",
+                "status": "ACTIVE",
                 "enabled": True,
                 "last_event": self.latest_safety_reason,
-                "last_update": time.strftime("%H:%M:%S"),
+                "last_update": now_text,
                 "message": self.latest_safety_reason,
+                "input": {
+                    "raw_cmd": twist_to_dict(self.latest_cmd),
+                    "raw_gimbal_cmd": twist_to_dict(self.latest_gimbal_cmd),
+                },
+                "output": {
+                    "safe_cmd": twist_to_dict(self.latest_safe_cmd),
+                    "safe_gimbal_cmd": twist_to_dict(self.latest_safe_gimbal_cmd),
+                },
+                "current_action": self.current_command,
+                "last_error": "",
             },
             "MANUAL_AGENT": {
-                "status": "active" if self.manual_override_cmd is not None else "idle",
+                "status": "ACTIVE" if self.manual_override_cmd is not None else "IDLE",
                 "enabled": True,
                 "last_event": self.manual_override_action,
-                "last_update": time.strftime("%H:%M:%S"),
+                "last_update": now_text,
                 "message": self.manual_override_action,
+                "input": {
+                    "control_source": self.current_control_source,
+                    "override_until": round(self.manual_override_until, 3) if self.manual_override_until else None,
+                },
+                "output": {
+                    "action": self.manual_override_action,
+                    "cmd_active": self.manual_override_cmd is not None,
+                },
+                "current_action": self.manual_override_action,
+                "last_error": "",
             },
             "DASHBOARD_AGENT": {
-                "status": "online",
+                "status": "ONLINE",
                 "enabled": True,
                 "last_event": self.current_command,
-                "last_update": time.strftime("%H:%M:%S"),
+                "last_update": now_text,
                 "message": self.current_control_source,
+                "input": {
+                    "last_command": self.current_command,
+                    "last_command_time": round(self.last_command_time, 3) if self.last_command_time else None,
+                },
+                "output": {
+                    "dashboard_version": DASHBOARD_VERSION,
+                    "detail_endpoints": [
+                        "/api/detail/telemetry",
+                        "/api/detail/agent",
+                        "/api/detail/logs",
+                        "/api/detail/models",
+                        "/api/detail/sub_agents",
+                    ],
+                },
+                "current_action": self.current_command,
+                "last_error": "",
             },
         }
 

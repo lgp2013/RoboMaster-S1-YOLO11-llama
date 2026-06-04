@@ -115,6 +115,14 @@ Right side:
 
 Each card shows only short summaries. Long text and JSON are opened in the shared detail modal.
 
+The `Sub-Agent Status` detail modal also shows per-agent:
+
+- input payload
+- output payload
+- current action
+- last error
+- last update time
+
 ## Follow Lock State
 
 The follow lock state is restricted to:

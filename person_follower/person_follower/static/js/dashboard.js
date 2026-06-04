@@ -1,90 +1,90 @@
 const I18N = {
   zh: {
-    appTitle: "RoboMaster Tactical AI Console",
-    liveFeed: "LIVE FEED",
-    modeShort: "MODE",
-    gestureShort: "GESTURE",
-    targetShort: "TARGET",
-    vectorShort: "VECTOR",
-    robotTelemetry: "ROBOT TELEMETRY",
-    battery: "BATTERY",
-    agentIntel: "AGENT INTELLIGENCE",
-    actionPlan: "ACTION PLAN",
-    sceneUnderstanding: "SCENE",
-    eventLog: "EVENT LOG",
-    subAgents: "SUB-AGENT STATUS",
-    detail: "DETAIL",
-    settings: "SETTINGS",
-    settingsTitle: "SYSTEM SETTINGS",
-    close: "CLOSE",
-    refresh: "REFRESH",
-    copy: "COPY",
-    clear: "CLEAR",
-    saveSettings: "SAVE SETTINGS",
-    manualOverride: "MANUAL OVERRIDE",
-    lowSpeed: "LOW SPEED",
-    emergencyStop: "EMERGENCY STOP",
-    sleep: "SLEEP",
-    wake: "WAKE",
-    startFollow: "START FOLLOW",
-    pauseFollow: "PAUSE FOLLOW",
-    forward: "FORWARD",
-    backward: "BACKWARD",
-    turnLeft: "TURN LEFT",
-    turnRight: "TURN RIGHT",
-    stop: "STOP",
-    strafeLeft: "STRAFE LEFT",
-    strafeRight: "STRAFE RIGHT",
-    gimbalUp: "GIMBAL UP",
-    gimbalDown: "GIMBAL DOWN",
-    gimbalLeft: "GIMBAL LEFT",
-    gimbalRight: "GIMBAL RIGHT",
-    gimbalCenter: "GIMBAL CENTER",
-    agentMode: "AGENT MODE",
-    gestureMode: "GESTURE MODE",
-    idleMode: "IDLE",
-    autoLock: "AUTO LOCK",
-    snapshot: "SNAPSHOT",
-    startRecord: "START RECORD",
-    stopRecord: "STOP RECORD",
-    clearLogs: "CLEAR LOGS",
-    resetTarget: "RESET TARGET",
-    reconnectRobot: "RECONNECT",
-    clickToLock: "Click video to lock person",
-    lockState: "LOCK",
-    connection: "CONNECTION",
-    status: "STATUS",
-    currentAction: "ACTION",
-    latency: "LATENCY",
-    tokens: "TOKENS",
-    controlSource: "SOURCE",
-    modelShort: "MODEL",
-    modelRuntime: "MODEL RUNTIME",
-    robotIp: "Robot IP",
-    llmEnabled: "LLM Enabled",
-    llmBaseUrl: "LLM Base URL",
-    llmModel: "LLM Model",
-    vlmEnabled: "VLM Enabled",
-    vlmBaseUrl: "VLM Base URL",
-    vlmModel: "VLM Model",
-    agentEnabled: "Agent Enabled",
-    manualForwardSpeed: "Manual Forward Speed",
-    manualTurnSpeed: "Manual Turn Speed",
-    manualDuration: "Manual Action Duration",
-    coreData: "Core Data",
-    safetyZone: "Safety Control",
-    chassisZone: "Chassis Control",
-    gimbalZone: "Gimbal Control",
-    modeZone: "Mode & Utility",
-    copied: "Copied",
-    copyFailed: "Copy failed",
-    online: "online",
-    offline: "offline",
-    standby: "standby",
-    thinking: "thinking",
-    connected: "connected",
-    disconnected: "disconnected",
-    none: "none",
+    appTitle: "RoboMaster \u6218\u672f\u667a\u80fd\u63a7\u5236\u53f0",
+    liveFeed: "\u5b9e\u65f6\u89c6\u9891",
+    modeShort: "\u6a21\u5f0f",
+    gestureShort: "\u624b\u52bf",
+    targetShort: "\u76ee\u6807",
+    vectorShort: "\u901f\u5ea6",
+    robotTelemetry: "\u673a\u5668\u4eba\u9065\u6d4b",
+    battery: "\u7535\u6c60",
+    agentIntel: "\u667a\u80fd\u4f53\u63a8\u7406",
+    actionPlan: "\u52a8\u4f5c\u89c4\u5212",
+    sceneUnderstanding: "\u573a\u666f",
+    eventLog: "\u4e8b\u4ef6\u65e5\u5fd7",
+    subAgents: "\u5b50\u667a\u80fd\u4f53\u72b6\u6001",
+    detail: "\u8be6\u60c5",
+    settings: "\u8bbe\u7f6e",
+    settingsTitle: "\u7cfb\u7edf\u8bbe\u7f6e",
+    close: "\u5173\u95ed",
+    refresh: "\u5237\u65b0",
+    copy: "\u590d\u5236",
+    clear: "\u6e05\u7a7a",
+    saveSettings: "\u4fdd\u5b58\u8bbe\u7f6e",
+    manualOverride: "\u624b\u52a8\u63a5\u7ba1",
+    lowSpeed: "\u4f4e\u901f\u5b89\u5168",
+    emergencyStop: "\u7d27\u6025\u505c\u6b62",
+    sleep: "\u4f11\u7720",
+    wake: "\u5524\u9192",
+    startFollow: "\u542f\u52a8\u8ddf\u968f",
+    pauseFollow: "\u6682\u505c\u8ddf\u968f",
+    forward: "\u524d\u8fdb",
+    backward: "\u540e\u9000",
+    turnLeft: "\u5de6\u8f6c",
+    turnRight: "\u53f3\u8f6c",
+    stop: "\u505c\u6b62",
+    strafeLeft: "\u5de6\u5e73\u79fb",
+    strafeRight: "\u53f3\u5e73\u79fb",
+    gimbalUp: "\u4e91\u53f0\u4e0a",
+    gimbalDown: "\u4e91\u53f0\u4e0b",
+    gimbalLeft: "\u4e91\u53f0\u5de6",
+    gimbalRight: "\u4e91\u53f0\u53f3",
+    gimbalCenter: "\u4e91\u53f0\u56de\u4e2d",
+    agentMode: "\u667a\u80fd\u4f53\u6a21\u5f0f",
+    gestureMode: "\u624b\u52bf\u6a21\u5f0f",
+    idleMode: "\u5f85\u673a",
+    autoLock: "\u81ea\u52a8\u9501\u5b9a",
+    snapshot: "\u622a\u56fe",
+    startRecord: "\u5f00\u59cb\u5f55\u50cf",
+    stopRecord: "\u505c\u6b62\u5f55\u50cf",
+    clearLogs: "\u6e05\u7a7a\u65e5\u5fd7",
+    resetTarget: "\u91cd\u7f6e\u76ee\u6807",
+    reconnectRobot: "\u91cd\u65b0\u8fde\u63a5",
+    clickToLock: "\u70b9\u51fb\u89c6\u9891\u9501\u5b9a\u4eba\u7269",
+    lockState: "\u9501\u5b9a",
+    connection: "\u8fde\u63a5",
+    status: "\u72b6\u6001",
+    currentAction: "\u52a8\u4f5c",
+    latency: "\u5ef6\u8fdf",
+    tokens: "\u4ee4\u724c",
+    controlSource: "\u6765\u6e90",
+    modelShort: "\u6a21\u578b",
+    modelRuntime: "\u6a21\u578b\u8fd0\u884c",
+    robotIp: "\u673a\u5668\u4eba IP",
+    llmEnabled: "\u542f\u7528 LLM",
+    llmBaseUrl: "LLM \u5730\u5740",
+    llmModel: "LLM \u6a21\u578b",
+    vlmEnabled: "\u542f\u7528 VLM",
+    vlmBaseUrl: "VLM \u5730\u5740",
+    vlmModel: "VLM \u6a21\u578b",
+    agentEnabled: "\u542f\u7528 Agent",
+    manualForwardSpeed: "\u624b\u52a8\u524d\u8fdb\u901f\u5ea6",
+    manualTurnSpeed: "\u624b\u52a8\u8f6c\u5411\u901f\u5ea6",
+    manualDuration: "\u624b\u52a8\u52a8\u4f5c\u65f6\u957f",
+    coreData: "\u6838\u5fc3\u6570\u636e",
+    safetyZone: "\u5b89\u5168\u63a7\u5236\u533a",
+    chassisZone: "\u5e95\u76d8\u63a7\u5236\u533a",
+    gimbalZone: "\u4e91\u53f0\u63a7\u5236\u533a",
+    modeZone: "\u6a21\u5f0f\u4e0e\u8f85\u52a9\u533a",
+    copied: "\u5df2\u590d\u5236",
+    copyFailed: "\u590d\u5236\u5931\u8d25",
+    online: "\u5728\u7ebf",
+    offline: "\u79bb\u7ebf",
+    standby: "\u5f85\u547d",
+    thinking: "\u63a8\u7406\u4e2d",
+    connected: "\u5df2\u8fde\u63a5",
+    disconnected: "\u672a\u8fde\u63a5",
+    none: "\u65e0",
   },
   en: {
     appTitle: "RoboMaster Tactical AI Console",
@@ -176,11 +176,11 @@ const I18N = {
 };
 
 const DETAIL_META = {
-  telemetry: { endpoint: "/api/detail/telemetry", title: { zh: "Robot Telemetry Detail", en: "Robot Telemetry Detail" } },
-  agent: { endpoint: "/api/detail/agent", title: { zh: "Agent Intelligence Detail", en: "Agent Intelligence Detail" } },
-  logs: { endpoint: "/api/detail/logs", title: { zh: "Event Log Detail", en: "Event Log Detail" } },
-  models: { endpoint: "/api/detail/models", title: { zh: "Model Runtime Detail", en: "Model Runtime Detail" } },
-  sub_agents: { endpoint: "/api/detail/sub_agents", title: { zh: "Sub-Agent Status Detail", en: "Sub-Agent Status Detail" } },
+  telemetry: { endpoint: "/api/detail/telemetry", title: { zh: "\u673a\u5668\u4eba\u9065\u6d4b\u8be6\u60c5", en: "Robot Telemetry Detail" } },
+  agent: { endpoint: "/api/detail/agent", title: { zh: "\u667a\u80fd\u4f53\u63a8\u7406\u8be6\u60c5", en: "Agent Intelligence Detail" } },
+  logs: { endpoint: "/api/detail/logs", title: { zh: "\u4e8b\u4ef6\u65e5\u5fd7\u8be6\u60c5", en: "Event Log Detail" } },
+  models: { endpoint: "/api/detail/models", title: { zh: "\u6a21\u578b\u8fd0\u884c\u8be6\u60c5", en: "Model Runtime Detail" } },
+  sub_agents: { endpoint: "/api/detail/sub_agents", title: { zh: "\u5b50\u667a\u80fd\u4f53\u72b6\u6001\u8be6\u60c5", en: "Sub-Agent Status Detail" } },
 };
 
 const state = {
@@ -371,6 +371,8 @@ async function openDetailModal(type) {
 
 function closeDetailModal() {
   document.getElementById("detailModal").classList.remove("open");
+  state.currentDetailType = "";
+  state.currentDetailData = {};
 }
 
 async function refreshDetailModal() {
@@ -389,7 +391,8 @@ async function copyDetailContent() {
 }
 
 async function clearDetailLogs() {
-  if (state.currentDetailType !== "logs") return;
+  // Logs and Agent detail share the same backend clear action.
+  if (!["logs", "agent"].includes(state.currentDetailType)) return;
   await fetchJson("/api/logs/clear", { method: "POST" });
   await refreshStatus();
   await refreshDetailModal();
@@ -401,7 +404,7 @@ function renderDetailModal(type, data) {
   const clearButton = document.getElementById("detailClear");
 
   filter.style.display = type === "logs" ? "inline-block" : "none";
-  clearButton.style.display = type === "logs" ? "inline-flex" : "none";
+  clearButton.style.display = ["logs", "agent"].includes(type) ? "inline-flex" : "none";
 
   if (type === "logs") {
     renderLogDetail(body, filter, data);
@@ -447,6 +450,7 @@ function renderLogDetail(body, filter, data) {
 }
 
 function renderSubAgentDetail(data) {
+  // Render per-agent input, output, action and error as separate blocks.
   const items = data.items || {};
   const followMeta = data.follow_meta || {};
   const cards = Object.entries(items).map(([name, info]) => `
@@ -454,6 +458,26 @@ function renderSubAgentDetail(data) {
       <span>${escapeHtml(name)}</span>
       <strong>${escapeHtml(String(info.status || "--"))}</strong>
       <p>${escapeHtml(String(info.message || info.last_event || "--"))}</p>
+      <div class="detail-subsection">
+        <span>INPUT</span>
+        <pre>${escapeHtml(JSON.stringify(info.input || {}, null, 2))}</pre>
+      </div>
+      <div class="detail-subsection">
+        <span>OUTPUT</span>
+        <pre>${escapeHtml(JSON.stringify(info.output || {}, null, 2))}</pre>
+      </div>
+      <div class="detail-subsection">
+        <span>ACTION</span>
+        <strong>${escapeHtml(String(info.current_action || "--"))}</strong>
+      </div>
+      <div class="detail-subsection">
+        <span>LAST ERROR</span>
+        <strong>${escapeHtml(String(info.last_error || "--"))}</strong>
+      </div>
+      <div class="detail-subsection">
+        <span>UPDATED</span>
+        <strong>${escapeHtml(String(info.last_update || "--"))}</strong>
+      </div>
       <pre>${escapeHtml(JSON.stringify(info, null, 2))}</pre>
     </div>
   `);
