@@ -50,6 +50,18 @@ h1 { margin: 3px 0 0; font-size: clamp(17px, 1.45vw, 26px); font-weight: 800; te
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 .status-pill { flex: 0 1 auto; }
+.top-status button,
+.top-status .clock {
+  height: 38px;
+  min-height: 38px;
+  align-self: stretch;
+}
+.top-status button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
 .status-pill span:not(.lamp) { color: var(--muted); font-size: 10px; white-space: nowrap; }
 .status-pill strong, .clock { color: var(--cyan); font-weight: 800; }
 .status-button, button { color: var(--text); font: inherit; cursor: pointer; }
@@ -144,7 +156,13 @@ button.danger { background: linear-gradient(180deg, #8e2f22, #3a100d); border-co
 button.sleep { background: linear-gradient(180deg, #8b4f17, #2f1808); border-color: var(--orange); }
 button.wake { background: linear-gradient(180deg, #2f6c3b, #102515); border-color: rgba(134, 192, 108, 0.88); }
 .micro-button { min-width: 58px; min-height: 26px; padding: 0 8px; font-size: 11px; color: var(--cyan); }
-.top-status .lang-toggle, .top-status .settings-toggle { min-height: 38px; padding: 0 12px; }
+.top-status .lang-toggle,
+.top-status .settings-toggle {
+  min-width: 88px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+.top-status .lang-toggle { min-width: 56px; }
 
 .modal-backdrop {
   display: none; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; padding: 24px;
