@@ -228,6 +228,12 @@ class PersonFollowerNode(Node):
         self.video_output_path = ""
         self.last_snapshot_path = ""
         self.last_reconnect_time = 0.0
+        self.last_command_result: Dict[str, object] = {
+            "success": True,
+            "command": "BOOT",
+            "message": "Dashboard initialized",
+            "timestamp": round(time.time(), 3),
+        }
 
         self.dashboard = None
         if bool(self.get_parameter("dashboard_enabled").value):
@@ -237,6 +243,7 @@ class PersonFollowerNode(Node):
                 jpeg_quality=int(self.get_parameter("jpeg_quality").value),
                 command_callback=self.handle_dashboard_command,
                 settings_callback=self.handle_dashboard_settings,
+                media_callback=self.media_data,
             )
             self.dashboard.start()
             self.get_logger().info(
@@ -565,6 +572,14 @@ class PersonFollowerNode(Node):
         payload = payload or {}
         self.publish_robot_command(command, payload)
         result = self.apply_robot_command(command, source="DASHBOARD", payload=payload)
+        self.last_command_result = {
+            "success": bool(result.get("success", result.get("ok", False))),
+            "command": str(result.get("command", command)),
+            "message": str(result.get("message", result.get("error", ""))),
+            "path": str(result.get("path", "")),
+            "duration_seconds": result.get("duration_seconds"),
+            "timestamp": round(time.time(), 3),
+        }
         status = self._status_dict()
         result["status"] = status
         return result
@@ -1214,6 +1229,50 @@ class PersonFollowerNode(Node):
         self.publish_event("SYSTEM", "%s stopped recording" % source, event_type="record")
         return self._success("STOP_RECORD", "Recording stopped", path=path, duration_seconds=duration)
 
+    def _media_items(self, directory: Path, kind: str, limit: int = 16) -> List[Dict[str, object]]:
+        if not directory.exists():
+            return []
+        items: List[Dict[str, object]] = []
+        for path in sorted(directory.glob("*"), key=lambda item: item.stat().st_mtime, reverse=True):
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            relative_path = path.relative_to(self.record_root).as_posix()
+            items.append(
+                {
+                    "kind": kind,
+                    "name": path.name,
+                    "relative_path": relative_path,
+                    "url": "/api/media/file?path=%s" % relative_path,
+                    "size_bytes": int(stat.st_size),
+                    "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime)),
+                }
+            )
+            if len(items) >= limit:
+                break
+        return items
+
+    def media_data(self) -> Dict[str, object]:
+        snapshots = self._media_items(self.snapshot_dir, "snapshot")
+        videos = self._media_items(self.video_dir, "video")
+        latest_snapshot = snapshots[0] if snapshots else None
+        latest_video = videos[0] if videos else None
+        return {
+            "record_root": str(self.record_root.resolve()),
+            "snapshot_dir": str(self.snapshot_dir.resolve()),
+            "video_dir": str(self.video_dir.resolve()),
+            "snapshot_count": len(snapshots),
+            "video_count": len(videos),
+            "latest_snapshot": latest_snapshot,
+            "latest_video": latest_video,
+            "last_snapshot_path": self.last_snapshot_path,
+            "active_recording": self.recording,
+            "video_output_path": self.video_output_path,
+            "recording_started_at": round(self.recording_started_at, 3) if self.recording_started_at else None,
+            "snapshots": snapshots,
+            "videos": videos,
+        }
+
     def _agent_status_map(self) -> Dict[str, Dict[str, object]]:
         """汇总每个子智能体当前状态，供 Dashboard 渲染。"""
         now_text = time.strftime("%H:%M:%S")
@@ -1348,6 +1407,7 @@ class PersonFollowerNode(Node):
                         "/api/detail/logs",
                         "/api/detail/models",
                         "/api/detail/sub_agents",
+                        "/api/detail/media",
                     ],
                 },
                 "current_action": self.current_command,
@@ -1436,6 +1496,14 @@ class PersonFollowerNode(Node):
             },
             "AGENT": {"status": sub_agents["LLM_AGENT"]["status"], "model_name": self.planner_agent.model},
         }
+        media_payload = self.media_data()
+        media_summary = {
+            "snapshot_count": media_payload["snapshot_count"],
+            "video_count": media_payload["video_count"],
+            "latest_snapshot_name": media_payload["latest_snapshot"]["name"] if media_payload["latest_snapshot"] else "none",
+            "latest_video_name": media_payload["latest_video"]["name"] if media_payload["latest_video"] else "none",
+            "recording_active": self.recording,
+        }
         detail_payload = {
             "telemetry": {
                 "battery": self.battery_percent,
@@ -1522,6 +1590,7 @@ class PersonFollowerNode(Node):
                     "lock_state": self.lock_state,
                 },
             },
+            "media": media_payload,
         }
         return {
             "connected": camera_online,
@@ -1597,9 +1666,11 @@ class PersonFollowerNode(Node):
                 "last_snapshot_path": self.last_snapshot_path,
                 "started_at": round(self.recording_started_at, 3) if self.recording_started_at else None,
             },
+            "last_command_result": dict(self.last_command_result),
             "telemetry_summary": telemetry_summary,
             "agent_summary": agent_summary,
             "event_summary": event_summary,
+            "media_summary": media_summary,
             "model_runtime": model_runtime,
             "details": detail_payload,
             "raw_cmd": twist_to_dict(self.latest_cmd),

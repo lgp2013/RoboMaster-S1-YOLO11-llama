@@ -3,13 +3,14 @@
 import os
 import threading
 import time
+from pathlib import Path
 from typing import Callable, Dict, Optional
 
 import cv2
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, send_file
 
 
-DASHBOARD_VERSION = "tactical-detail-modal-20260604-1450"
+DASHBOARD_VERSION = "tactical-detail-modal-20260604-1705"
 
 
 class DashboardServer:
@@ -22,6 +23,7 @@ class DashboardServer:
         jpeg_quality: int = 80,
         command_callback: Optional[Callable[[str, Dict[str, object]], Dict[str, object]]] = None,
         settings_callback: Optional[Callable[[Optional[Dict[str, object]]], Dict[str, object]]] = None,
+        media_callback: Optional[Callable[[], Dict[str, object]]] = None,
     ) -> None:
         package_dir = os.path.dirname(os.path.abspath(__file__))
         self.host = host
@@ -29,6 +31,7 @@ class DashboardServer:
         self.jpeg_quality = int(jpeg_quality)
         self.command_callback = command_callback
         self.settings_callback = settings_callback
+        self.media_callback = media_callback
         self.lock = threading.Lock()
         self.latest_frame = None
         self.status: Dict[str, object] = {}
@@ -62,6 +65,24 @@ class DashboardServer:
         status = self._status_copy()
         return dict(status.get("details", {}).get(name, {}))
 
+    def _media_data(self) -> Dict[str, object]:
+        if self.media_callback is not None:
+            return dict(self.media_callback())
+        return self._detail_data("media")
+
+    def _resolve_media_path(self, relative_path: str) -> Path:
+        data = self._media_data()
+        record_root = data.get("record_root")
+        if not record_root:
+            raise FileNotFoundError("record root unavailable")
+        root = Path(str(record_root)).resolve()
+        candidate = (root / relative_path).resolve()
+        if candidate != root and root not in candidate.parents:
+            raise FileNotFoundError("path escapes record root")
+        if not candidate.exists():
+            raise FileNotFoundError("media file not found")
+        return candidate
+
     def _setup_routes(self) -> None:
         @self.app.after_request
         def no_cache(response):
@@ -74,6 +95,10 @@ class DashboardServer:
         @self.app.route("/")
         def index():
             return render_template("index.html", dashboard_version=DASHBOARD_VERSION)
+
+        @self.app.route("/media")
+        def media_page():
+            return render_template("media.html", dashboard_version=DASHBOARD_VERSION)
 
         @self.app.route("/api/dashboard/version")
         def api_dashboard_version():
@@ -167,6 +192,25 @@ class DashboardServer:
         def api_detail_sub_agents():
             try:
                 return jsonify(self._ok(self._detail_data("sub_agents")))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/detail/media")
+        def api_detail_media():
+            try:
+                return jsonify(self._ok(self._media_data()))
+            except Exception as exc:
+                return jsonify(self._error(str(exc))), 500
+
+        @self.app.route("/api/media/file")
+        def api_media_file():
+            try:
+                relative_path = str(request.args.get("path", "")).strip()
+                if not relative_path:
+                    return jsonify(self._error("missing path")), 400
+                return send_file(self._resolve_media_path(relative_path))
+            except FileNotFoundError as exc:
+                return jsonify(self._error(str(exc))), 404
             except Exception as exc:
                 return jsonify(self._error(str(exc))), 500
 

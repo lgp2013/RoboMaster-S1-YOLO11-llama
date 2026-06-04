@@ -22,6 +22,7 @@
       <div class="status-pill"><span class="lamp" id="followLamp"></span><span>FOLLOW</span><strong id="followState">--</strong></div>
       <div class="status-pill"><span class="lamp" id="agentLamp"></span><span>LLM</span><strong id="agentTopState">--</strong></div>
       <div class="status-pill"><span class="lamp" id="recordLamp"></span><span>REC</span><strong id="recordState">--</strong></div>
+      <a class="settings-toggle top-link" href="/media" target="_blank" rel="noopener" data-i18n="mediaPage">MEDIA</a>
       <button class="settings-toggle" id="settingsToggle" type="button" data-i18n="settings">SETTINGS</button>
       <button class="lang-toggle" id="langToggle" type="button">EN</button>
       <div class="clock" id="clock">--:--:--</div>
@@ -122,6 +123,29 @@
         </div>
       </section>
 
+      <section class="cut-panel summary-card" data-detail-type="media">
+        <div class="panel-header clickable-header">
+          <span data-i18n="mediaManager">MEDIA MANAGER</span>
+          <div class="header-tools">
+            <a class="micro-button top-link" href="/media" target="_blank" rel="noopener" data-i18n="openMedia">OPEN</a>
+            <button class="micro-button detail-button" data-detail-type="media" type="button" data-i18n="detail">DETAIL</button>
+          </div>
+        </div>
+        <div class="summary-body compact-list">
+          <div class="summary-row"><span data-i18n="snapshotCount">Snapshots</span><strong id="mediaSnapshotSummary">--</strong></div>
+          <div class="summary-row"><span data-i18n="videoCount">Videos</span><strong id="mediaVideoSummary">--</strong></div>
+          <div class="summary-row"><span data-i18n="recordingState">Recording</span><strong id="mediaRecordingSummary">--</strong></div>
+          <div class="summary-block">
+            <span data-i18n="latestSnapshot">Latest Snapshot</span>
+            <strong id="mediaLatestSnapshot" class="ellipsis" title="--">--</strong>
+          </div>
+          <div class="summary-block">
+            <span data-i18n="latestVideo">Latest Video</span>
+            <strong id="mediaLatestVideo" class="ellipsis" title="--">--</strong>
+          </div>
+        </div>
+      </section>
+
       <section class="cut-panel summary-card" data-detail-type="logs">
         <div class="panel-header clickable-header">
           <span data-i18n="eventLog">EVENT LOG</span>
@@ -137,6 +161,10 @@
 
     <section class="control-panel cut-panel">
       <div class="panel-header"><span data-i18n="manualOverride">MANUAL OVERRIDE</span><strong data-i18n="lowSpeed">LOW SPEED</strong></div>
+      <div class="command-strip">
+        <span id="commandStatusLabel" data-i18n="commandStatus">COMMAND STATUS</span>
+        <strong id="commandStatusText">--</strong>
+      </div>
       <div class="control-sections">
         <section class="control-zone">
           <h3 data-i18n="safetyZone">Safety Control</h3>

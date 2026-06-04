@@ -73,6 +73,15 @@ const I18N = {
     manualDuration: "\u624b\u52a8\u52a8\u4f5c\u65f6\u957f",
     coreData: "\u6838\u5fc3\u6570\u636e",
     versionLabel: "\u7248\u672c\u53f7",
+    mediaPage: "\u5a92\u4f53\u9875",
+    mediaManager: "\u5a92\u4f53\u7ba1\u7406",
+    openMedia: "\u6253\u5f00",
+    snapshotCount: "\u622a\u56fe\u6570",
+    videoCount: "\u5f55\u50cf\u6570",
+    recordingState: "\u5f55\u50cf\u72b6\u6001",
+    latestSnapshot: "\u6700\u65b0\u622a\u56fe",
+    latestVideo: "\u6700\u65b0\u5f55\u50cf",
+    commandStatus: "\u6307\u4ee4\u7ed3\u679c",
     safetyZone: "\u5b89\u5168\u63a7\u5236\u533a",
     chassisZone: "\u5e95\u76d8\u63a7\u5236\u533a",
     gimbalZone: "\u4e91\u53f0\u63a7\u5236\u533a",
@@ -161,6 +170,15 @@ const I18N = {
     manualDuration: "Manual Action Duration",
     coreData: "Core Data",
     versionLabel: "Version",
+    mediaPage: "MEDIA",
+    mediaManager: "MEDIA MANAGER",
+    openMedia: "OPEN",
+    snapshotCount: "Snapshots",
+    videoCount: "Videos",
+    recordingState: "Recording",
+    latestSnapshot: "Latest Snapshot",
+    latestVideo: "Latest Video",
+    commandStatus: "COMMAND STATUS",
     safetyZone: "Safety Control",
     chassisZone: "Chassis Control",
     gimbalZone: "Gimbal Control",
@@ -183,6 +201,7 @@ const DETAIL_META = {
   logs: { endpoint: "/api/detail/logs", title: { zh: "\u4e8b\u4ef6\u65e5\u5fd7\u8be6\u60c5", en: "Event Log Detail" } },
   models: { endpoint: "/api/detail/models", title: { zh: "\u6a21\u578b\u8fd0\u884c\u8be6\u60c5", en: "Model Runtime Detail" } },
   sub_agents: { endpoint: "/api/detail/sub_agents", title: { zh: "\u5b50\u667a\u80fd\u4f53\u72b6\u6001\u8be6\u60c5", en: "Sub-Agent Status Detail" } },
+  media: { endpoint: "/api/detail/media", title: { zh: "\u5a92\u4f53\u7ba1\u7406\u8be6\u60c5", en: "Media Manager Detail" } },
 };
 
 const state = {
@@ -265,6 +284,10 @@ async function sendControl(command, extra = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ command, ...extra }),
   });
+  const message = payload.message || payload.error || "no response";
+  const path = payload.path ? ` ${payload.path}` : "";
+  setText("commandStatusText", `${payload.command || command}: ${message}${path}`);
+  showHint(`${payload.command || command}: ${message}`);
   if (payload.status) {
     state.lastStatus = payload.status;
     renderStatus(payload.status);
@@ -285,6 +308,7 @@ async function refreshStatus() {
 function renderStatus(data = {}) {
   const telemetry = data.telemetry_summary || {};
   const agentSummary = data.agent_summary || {};
+  const mediaSummary = data.media_summary || {};
   const modelRuntime = data.model_runtime || {};
   const subAgents = data.sub_agents || {};
 
@@ -340,6 +364,19 @@ function renderStatus(data = {}) {
   setText("modelVlmSummary", modelRuntime.VLM?.status || "--");
   setText("modelLlmSummary", modelRuntime.LLM?.status || "--");
   setText("modelAgentSummary", modelRuntime.AGENT?.status || "--");
+  setText("mediaSnapshotSummary", mediaSummary.snapshot_count ?? "--");
+  setText("mediaVideoSummary", mediaSummary.video_count ?? "--");
+  setText("mediaRecordingSummary", mediaSummary.recording_active ? "ON" : "OFF");
+  setText("mediaLatestSnapshot", ellipsis(mediaSummary.latest_snapshot_name || "--", 30));
+  setTitle("mediaLatestSnapshot", mediaSummary.latest_snapshot_name || "--");
+  setText("mediaLatestVideo", ellipsis(mediaSummary.latest_video_name || "--", 30));
+  setTitle("mediaLatestVideo", mediaSummary.latest_video_name || "--");
+  const lastCommand = data.last_command_result || {};
+  if (lastCommand.command) {
+    const commandMessage = `${lastCommand.command}: ${lastCommand.message || "--"}`;
+    setText("commandStatusText", ellipsis(commandMessage, 96));
+    setTitle("commandStatusText", commandMessage);
+  }
 
   renderEventSummary(data.event_summary || []);
 
@@ -418,6 +455,11 @@ function renderDetailModal(type, data) {
 
   if (type === "sub_agents") {
     body.innerHTML = renderSubAgentDetail(data);
+    return;
+  }
+
+  if (type === "media") {
+    body.innerHTML = renderMediaDetail(data);
     return;
   }
 
@@ -505,6 +547,47 @@ function renderKeyValueDetail(data) {
     `;
   });
   return `<div class="detail-grid">${cards.join("")}</div>`;
+}
+
+function renderMediaDetail(data) {
+  const snapshots = data.snapshots || [];
+  const videos = data.videos || [];
+  const renderItems = (items, kind) => {
+    if (!items.length) {
+      return `<div class="detail-item"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(t("none"))}</strong></div>`;
+    }
+    return items.map((item) => {
+      const preview = item.kind === "snapshot"
+        ? `<img class="detail-media-preview" src="${escapeHtml(item.url)}" alt="${escapeHtml(item.name)}">`
+        : `<video class="detail-media-preview" controls preload="metadata" src="${escapeHtml(item.url)}"></video>`;
+      return `
+        <div class="detail-item detail-media-item">
+          <span>${escapeHtml(item.name)}</span>
+          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${preview}</a>
+          <strong>${escapeHtml(item.modified_at || "--")}</strong>
+          <p>${escapeHtml(String(item.size_bytes || 0))} bytes</p>
+        </div>
+      `;
+    }).join("");
+  };
+  return `
+    <div class="detail-grid">
+      <div class="detail-item">
+        <span>RECORD ROOT</span>
+        <strong>${escapeHtml(data.record_root || "--")}</strong>
+        <p>${escapeHtml(data.active_recording ? "Recording active" : "Recording idle")}</p>
+      </div>
+      <div class="detail-item">
+        <span>COUNTS</span>
+        <strong>${escapeHtml(String(data.snapshot_count || 0))} snapshots / ${escapeHtml(String(data.video_count || 0))} videos</strong>
+        <p>${escapeHtml(data.video_output_path || data.last_snapshot_path || "--")}</p>
+      </div>
+    </div>
+    <h3>Snapshots</h3>
+    <div class="detail-grid">${renderItems(snapshots, "Snapshots")}</div>
+    <h3>Videos</h3>
+    <div class="detail-grid">${renderItems(videos, "Videos")}</div>
+  `;
 }
 
 function applyLanguage() {
