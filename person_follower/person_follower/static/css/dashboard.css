@@ -170,17 +170,40 @@ h1 { margin: 0; font-size: 18px; letter-spacing: 0.08em; }
 .control-zone h3 { margin: 0 0 10px; color: var(--muted); font-size: 13px; text-transform: uppercase; }
 
 .safety-mode-zone { grid-column: 1 / 2; }
-.safety-mode-grid { 
-  display: grid; 
-  grid-template-columns: repeat(4, 1fr); 
-  gap: 8px;
+.safety-mode-groups {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
   flex: 1;
 }
-.safety-mode-grid button {
-  min-height: 40px;
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(5, 13, 10, 0.3);
+  border: 1px solid rgba(120, 240, 228, 0.1);
+  padding: 8px;
+}
+.group-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: center;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(120, 240, 228, 0.15);
+}
+.group-buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  flex: 1;
+}
+.group-buttons button {
+  min-height: 36px;
   font-size: 12px;
   font-weight: 700;
-  padding: 5px 6px;
+  padding: 4px 6px;
 }
 
 .cross-grid { 

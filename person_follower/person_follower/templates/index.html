@@ -168,22 +168,42 @@
       <div class="control-sections">
         <section class="control-zone safety-mode-zone">
           <h3 data-i18n="safetyAndMode">SAFETY & MODE</h3>
-          <div class="safety-mode-grid">
-            <button class="danger" data-command="EMERGENCY_STOP" data-i18n="emergencyStop">EMERGENCY STOP</button>
-            <button class="sleep" data-command="SLEEP" data-i18n="sleep">SLEEP</button>
-            <button class="wake" data-command="WAKE" data-i18n="wake">WAKE</button>
-            <button id="startFollowButton" class="wake" data-command="START_FOLLOW" data-i18n="startFollow">START FOLLOW</button>
-            <button data-command="PAUSE_FOLLOW" data-i18n="pauseFollow">PAUSE FOLLOW</button>
-            <button data-command="AGENT_MODE" data-i18n="agentMode">AGENT MODE</button>
-            <button data-command="GESTURE_MODE" data-i18n="gestureMode">GESTURE MODE</button>
-            <button data-command="IDLE" data-i18n="idleMode">IDLE</button>
-            <button data-command="LOCK_TARGET" data-i18n="autoLock">AUTO LOCK</button>
-            <button data-command="SNAPSHOT" data-i18n="snapshot">SNAPSHOT</button>
-            <button data-command="START_RECORD" data-i18n="startRecord">START RECORD</button>
-            <button data-command="STOP_RECORD" data-i18n="stopRecord">STOP RECORD</button>
-            <button data-command="CLEAR_LOGS" data-i18n="clearLogs">CLEAR LOGS</button>
-            <button data-command="RESET_TARGET" data-i18n="resetTarget">RESET TARGET</button>
-            <button data-command="RECONNECT_ROBOT" data-i18n="reconnectRobot">RECONNECT</button>
+          <div class="safety-mode-groups">
+            <div class="button-group">
+              <span class="group-label" data-i18n="safetyGroup">SAFETY</span>
+              <div class="group-buttons">
+                <button class="danger" data-command="EMERGENCY_STOP" data-i18n="emergencyStop">EMERGENCY STOP</button>
+                <button class="sleep" data-command="SLEEP" data-i18n="sleep">SLEEP</button>
+                <button class="wake" data-command="WAKE" data-i18n="wake">WAKE</button>
+              </div>
+            </div>
+            <div class="button-group">
+              <span class="group-label" data-i18n="followGroup">FOLLOW</span>
+              <div class="group-buttons">
+                <button id="startFollowButton" class="wake" data-command="START_FOLLOW" data-i18n="startFollow">START FOLLOW</button>
+                <button data-command="PAUSE_FOLLOW" data-i18n="pauseFollow">PAUSE FOLLOW</button>
+                <button data-command="LOCK_TARGET" data-i18n="autoLock">AUTO LOCK</button>
+                <button data-command="RESET_TARGET" data-i18n="resetTarget">RESET TARGET</button>
+              </div>
+            </div>
+            <div class="button-group">
+              <span class="group-label" data-i18n="modeGroup">MODE</span>
+              <div class="group-buttons">
+                <button data-command="AGENT_MODE" data-i18n="agentMode">AGENT MODE</button>
+                <button data-command="GESTURE_MODE" data-i18n="gestureMode">GESTURE MODE</button>
+                <button data-command="IDLE" data-i18n="idleMode">IDLE</button>
+                <button data-command="RECONNECT_ROBOT" data-i18n="reconnectRobot">RECONNECT</button>
+              </div>
+            </div>
+            <div class="button-group">
+              <span class="group-label" data-i18n="mediaGroup">MEDIA</span>
+              <div class="group-buttons">
+                <button data-command="SNAPSHOT" data-i18n="snapshot">SNAPSHOT</button>
+                <button data-command="START_RECORD" data-i18n="startRecord">START RECORD</button>
+                <button data-command="STOP_RECORD" data-i18n="stopRecord">STOP RECORD</button>
+                <button data-command="CLEAR_LOGS" data-i18n="clearLogs">CLEAR LOGS</button>
+              </div>
+            </div>
           </div>
         </section>
 
