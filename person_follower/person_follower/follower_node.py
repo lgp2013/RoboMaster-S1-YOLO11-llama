@@ -718,6 +718,7 @@ class PersonFollowerNode(Node):
             "gesture": gesture_info,
             "gesture_enabled": self.gesture_enabled,
             "gesture_logs": list(self.gesture_controller.logs),
+            "runtime_settings": self.current_settings(),
             "scene": self.latest_scene,
             "agent": {
                 "enabled": self.agent_enabled,

@@ -258,23 +258,24 @@ h1 {
 
 .right-stack {
   display: grid;
-  grid-template-rows: 320px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-rows: 270px minmax(0, 1fr);
+  gap: 10px;
   min-height: 0;
 }
 
 .status-panel, .agent-panel, .log-panel, .control-panel { overflow: hidden; }
 
 .metric-grid {
-  padding: 12px;
+  height: calc(100% - 42px);
+  padding: 8px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .metric {
-  min-height: 66px;
-  padding: 11px;
+  min-height: 0;
+  padding: 8px;
   background: var(--panel-2);
   border: 1px solid rgba(120, 240, 228, 0.16);
 }
@@ -282,23 +283,27 @@ h1 {
 .metric span, .agent-readout label {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .metric strong {
   color: var(--text);
-  font-size: 20px;
+  font-size: 16px;
+  line-height: 1.1;
+  word-break: break-word;
 }
 
 .agent-readout {
+  height: calc(100% - 42px);
   padding: 12px;
+  overflow: auto;
 }
 
 .agent-readout p, .agent-readout pre {
   margin: 0 0 10px;
-  max-height: 74px;
+  max-height: 58px;
   overflow: auto;
   color: var(--text);
   font-size: 12px;
@@ -324,17 +329,17 @@ h1 {
 
 .radar-block {
   display: grid;
-  grid-template-columns: 112px 1fr;
+  grid-template-columns: 92px 1fr;
   gap: 10px;
   margin: 10px 0;
-  padding: 10px;
+  padding: 8px;
   background: rgba(5, 13, 10, 0.54);
   border: 1px solid rgba(120, 240, 228, 0.14);
 }
 
 .radar-scope {
   position: relative;
-  width: 96px;
+  width: 78px;
   aspect-ratio: 1;
   overflow: hidden;
   border: 1px solid rgba(120, 240, 228, 0.38);
@@ -384,7 +389,7 @@ h1 {
 }
 
 .agent-log {
-  max-height: 74px;
+  max-height: 64px;
   margin: 0;
   padding: 0 0 0 18px;
   overflow: auto;

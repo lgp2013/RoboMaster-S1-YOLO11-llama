@@ -426,6 +426,7 @@ function showLogHint(text) {
 
 function openSettings() {
   document.getElementById("settingsModal")?.classList.add("open");
+  fillSettings(fallbackSettingsFromStatus(), state.lastStatus || {});
   loadSettings();
 }
 
@@ -483,23 +484,44 @@ async function loadSettings() {
     fillSettings(data.settings || {}, data.core || {});
     setText("settingsMessage", "");
   } catch (err) {
+    fillSettings(fallbackSettingsFromStatus(), state.lastStatus || {});
     setText("settingsMessage", `${t("settingsFailed")}: ${err}`);
   }
 }
 
 function fillSettings(settings, core) {
-  setInputValue("settingRobotIp", settings.robot_ip);
-  setInputChecked("settingLlmEnabled", settings.llm_enabled);
-  setInputValue("settingLlmBaseUrl", settings.llm_base_url);
-  setInputValue("settingLlmModel", settings.llm_model);
-  setInputChecked("settingVlmEnabled", settings.vlm_enabled);
-  setInputValue("settingVlmBaseUrl", settings.vlm_base_url);
-  setInputValue("settingVlmModel", settings.vlm_model);
-  setInputChecked("settingAgentEnabled", settings.agent_enabled);
-  setInputValue("settingManualForwardSpeed", settings.manual_forward_speed);
-  setInputValue("settingManualTurnSpeed", settings.manual_turn_speed);
-  setInputValue("settingManualDuration", settings.manual_action_duration);
+  const merged = { ...fallbackSettingsFromStatus(), ...(settings || {}) };
+  setInputValue("settingRobotIp", merged.robot_ip);
+  setInputChecked("settingLlmEnabled", merged.llm_enabled);
+  setInputValue("settingLlmBaseUrl", merged.llm_base_url);
+  setInputValue("settingLlmModel", merged.llm_model);
+  setInputChecked("settingVlmEnabled", merged.vlm_enabled);
+  setInputValue("settingVlmBaseUrl", merged.vlm_base_url);
+  setInputValue("settingVlmModel", merged.vlm_model);
+  setInputChecked("settingAgentEnabled", merged.agent_enabled);
+  setInputValue("settingManualForwardSpeed", merged.manual_forward_speed);
+  setInputValue("settingManualTurnSpeed", merged.manual_turn_speed);
+  setInputValue("settingManualDuration", merged.manual_action_duration);
   setText("settingsCoreData", JSON.stringify(core, null, 2));
+}
+
+function fallbackSettingsFromStatus() {
+  const status = state.lastStatus || {};
+  const runtime = status.runtime_settings || {};
+  const compute = status.ai_compute || {};
+  return {
+    robot_ip: runtime.robot_ip ?? status.robot_ip ?? "",
+    llm_enabled: runtime.llm_enabled ?? status.agent?.enabled ?? false,
+    llm_base_url: runtime.llm_base_url ?? "",
+    llm_model: runtime.llm_model ?? compute.model ?? "",
+    vlm_enabled: runtime.vlm_enabled ?? false,
+    vlm_base_url: runtime.vlm_base_url ?? "",
+    vlm_model: runtime.vlm_model ?? compute.vlm_model ?? "",
+    agent_enabled: runtime.agent_enabled ?? status.agent?.enabled ?? false,
+    manual_forward_speed: runtime.manual_forward_speed ?? "",
+    manual_turn_speed: runtime.manual_turn_speed ?? "",
+    manual_action_duration: runtime.manual_action_duration ?? "",
+  };
 }
 
 function setInputValue(id, value) {
