@@ -20,6 +20,8 @@ const i18n = {
     manualOverride: "MANUAL OVERRIDE",
     lowSpeed: "LOW SPEED",
     emergencyStop: "EMERGENCY STOP",
+    sleep: "SLEEP",
+    wake: "WAKE",
     startFollow: "START FOLLOW",
     pauseFollow: "PAUSE FOLLOW",
     forward: "FORWARD",
@@ -100,6 +102,8 @@ const i18n = {
     manualOverride: "手动接管",
     lowSpeed: "低速安全",
     emergencyStop: "紧急停止",
+    sleep: "软件休眠",
+    wake: "唤醒",
     startFollow: "启动跟随",
     pauseFollow: "暂停跟随",
     forward: "前进",
@@ -194,6 +198,18 @@ function compactStatus(value) {
   if (key === "unknown") return t("topUnknown");
   if (key === "thinking") return t("topThinking");
   return localizeValue(value);
+}
+
+function updateModeStyle(mode) {
+  const normalized = String(mode || "").toLowerCase();
+  document.body.dataset.mode = normalized || "unknown";
+  const modeEl = document.getElementById("mode");
+  modeEl?.classList.remove("mode-idle", "mode-follow", "mode-sleep", "mode-emergency", "mode-agent");
+  if (normalized === "sleep") modeEl?.classList.add("mode-sleep");
+  else if (normalized === "follow") modeEl?.classList.add("mode-follow");
+  else if (normalized === "emergency_stop") modeEl?.classList.add("mode-emergency");
+  else if (normalized === "agent_mode") modeEl?.classList.add("mode-agent");
+  else modeEl?.classList.add("mode-idle");
 }
 
 function applyLanguage() {
@@ -307,6 +323,7 @@ function renderStatus(data = {}) {
 
   setText("mode", data.mode || "--");
   setText("hudMode", data.mode || "--");
+  updateModeStyle(data.mode || "");
   setText("fps", data.fps ?? "--");
   setText("hudFps", data.fps ?? "--");
   setText("battery", data.battery == null ? "N/A" : `${data.battery}%`);

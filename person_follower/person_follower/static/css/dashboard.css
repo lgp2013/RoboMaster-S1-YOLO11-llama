@@ -427,7 +427,7 @@ input {
   height: calc(100% - 42px);
   padding: 12px;
   display: grid;
-  grid-template-columns: 1.35fr repeat(4, 1fr);
+  grid-template-columns: 1.25fr repeat(5, 1fr);
   grid-auto-rows: minmax(62px, 1fr);
   gap: 10px;
 }
@@ -460,6 +460,32 @@ button.danger {
 button.danger:hover {
   box-shadow: 0 0 28px rgba(242, 95, 76, 0.35);
 }
+
+button.sleep {
+  color: #fff3ee;
+  background: linear-gradient(180deg, #7f3024, #25100d);
+  border-color: rgba(242, 95, 76, 0.86);
+}
+
+button.sleep:hover {
+  box-shadow: 0 0 24px rgba(242, 95, 76, 0.28);
+}
+
+button.wake {
+  color: #eaffde;
+  background: linear-gradient(180deg, #2f6c3b, #102515);
+  border-color: rgba(134, 192, 108, 0.88);
+}
+
+button.wake:hover {
+  box-shadow: 0 0 24px rgba(134, 192, 108, 0.26);
+}
+
+.mode-follow { color: var(--green) !important; }
+.mode-sleep { color: var(--amber) !important; text-shadow: 0 0 12px rgba(217, 164, 65, 0.45); }
+.mode-emergency { color: var(--red) !important; text-shadow: 0 0 12px rgba(242, 95, 76, 0.45); }
+.mode-agent { color: var(--cyan) !important; }
+.mode-idle { color: var(--text) !important; }
 
 .top-status .lang-toggle {
   min-width: 62px;

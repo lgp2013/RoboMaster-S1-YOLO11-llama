@@ -1,6 +1,7 @@
 """ROS2 Foxy node for RoboMaster S1 YOLO person following and gesture control."""
 
 from collections import deque
+import json
 import threading
 import time
 from typing import Deque, Dict, List, Optional
@@ -37,6 +38,10 @@ class PersonFollowerNode(Node):
 
         self.camera_topic = str(self.get_parameter("camera_topic").value)
         self.cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
+        self.cmd_gimbal_topic = str(self.get_parameter("cmd_gimbal_topic").value)
+        self.robot_mode_topic = str(self.get_parameter("robot_mode_topic").value)
+        self.robot_command_topic = str(self.get_parameter("robot_command_topic").value)
+        self.led_command_topic = str(self.get_parameter("led_command_topic").value)
         self.robot_ip = str(self.get_parameter("robot_ip").value)
         self.control_rate_hz = float(self.get_parameter("control_rate_hz").value)
         self.lost_target_timeout_sec = float(self.get_parameter("lost_target_timeout_sec").value)
@@ -60,6 +65,10 @@ class PersonFollowerNode(Node):
         )
 
         self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
+        self.gimbal_pub = self.create_publisher(Twist, self.cmd_gimbal_topic, 10)
+        self.robot_mode_pub = self.create_publisher(String, self.robot_mode_topic, 10)
+        self.robot_command_pub = self.create_publisher(String, self.robot_command_topic, 10)
+        self.led_command_pub = self.create_publisher(String, self.led_command_topic, 10)
         self.gesture_state_pub = self.create_publisher(String, "/gesture/state", 10)
         self.gesture_command_pub = self.create_publisher(String, "/gesture/command", 10)
         self.gesture_debug_pub = self.create_publisher(Image, "/gesture/debug_image", 5)
@@ -160,15 +169,21 @@ class PersonFollowerNode(Node):
         self.get_logger().info("Person follower stage2 node started")
         self.get_logger().info("camera_topic=%s cmd_vel_topic=%s" % (self.camera_topic, self.cmd_vel_topic))
         self.battery_sub = self.create_subscription(BatteryState, "/battery", self.battery_callback, 10)
+        self.robot_command_sub = self.create_subscription(String, self.robot_command_topic, self.robot_command_callback, 10)
         # 所有状态字段初始化完成后再订阅图像，避免回调抢先触发时访问未创建的属性。
         self.image_sub = self.create_subscription(Image, self.camera_topic, self.image_callback, 10)
         self.control_timer = self.create_timer(1.0 / self.control_rate_hz, self.control_loop)
+        self.mode_timer = self.create_timer(0.5, self.publish_robot_mode)
         self.log_event("system boot: tactical dashboard online")
 
     def _declare_parameters(self) -> None:
         defaults = {
             "camera_topic": "/camera/image_color",
             "cmd_vel_topic": "/cmd_vel",
+            "cmd_gimbal_topic": "/cmd_gimbal",
+            "robot_mode_topic": "/robot/mode",
+            "robot_command_topic": "/robot/command",
+            "led_command_topic": "/robot/led_command",
             "robot_ip": "10.10.10.152",
             "yolo_model": "yolo11n.pt",
             "confidence_threshold": 0.45,
@@ -250,47 +265,104 @@ class PersonFollowerNode(Node):
         names = ["open_palm", "thumbs_up", "fist", "point_left", "point_right", "victory", "ok_sign"]
         return {name: str(self.get_parameter("gesture_actions.%s" % name).value) for name in names}
 
-    def handle_dashboard_command(self, command: str, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
-        """处理 Dashboard 按钮和 Agent 查询。"""
+    def robot_command_callback(self, msg: String) -> None:
+        """监听 /robot/command，允许外部 ROS 节点切换 STOP/FOLLOW/SLEEP/WAKE 等模式。"""
+        try:
+            data = json.loads(str(msg.data or ""))
+            if isinstance(data, dict) and data.get("source") == "dashboard":
+                return
+        except Exception:
+            pass
+        command = self._parse_robot_command(msg.data)
+        if command:
+            self.apply_robot_command(command, source="topic")
+
+    def _parse_robot_command(self, text: str) -> str:
+        """兼容纯字符串命令和 JSON：{"command": "SLEEP"}。"""
+        raw = str(text or "").strip()
+        if not raw:
+            return ""
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                raw = str(data.get("command", raw))
+        except Exception:
+            pass
+        return raw.strip().upper()
+
+    def publish_robot_mode(self) -> None:
+        """周期性发布当前模式，供 Dashboard 外的 ROS 节点订阅。"""
+        self.robot_mode_pub.publish(String(data=str(self.gesture_controller.mode)))
+
+    def publish_robot_command(self, command: str) -> None:
+        """Dashboard 操作同步发布到 /robot/command，便于录制和外部调试。"""
+        payload = {"command": str(command).upper(), "source": "dashboard", "timestamp": time.time()}
+        self.robot_command_pub.publish(String(data=json.dumps(payload, ensure_ascii=False)))
+
+    def publish_led_command(self, command: str) -> None:
+        """软件休眠的 LED 出口。实际 LED topic 可在外部桥接到 robomaster_ros。"""
+        self.led_command_pub.publish(String(data=str(command).upper()))
+
+    def apply_robot_command(self, command: str, source: str = "dashboard", payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
+        """统一处理 Dashboard 和 /robot/command 的机器人命令。"""
         payload = payload or {}
-        command = command.upper()
+        command = str(command).upper()
+        if self.gesture_controller.mode == ControlMode.SLEEP and command not in ("WAKE", "SLEEP", "EMERGENCY_STOP", "CLEAR_LOGS"):
+            self.publish_sleep_zero("sleep blocks %s" % command)
+            return {"ok": False, "mode": self.gesture_controller.mode, "message": "SLEEP mode blocks %s" % command}
         if command == "AGENT_MODE":
             self.gesture_controller.previous_mode = self.gesture_controller.mode
             self.gesture_controller.mode = ControlMode.AGENT_MODE
-            self.log_event("dashboard: enter AGENT_MODE")
+            self.log_event("%s: enter AGENT_MODE" % source)
+            self.publish_robot_mode()
             return {"ok": True, "mode": self.gesture_controller.mode, "event_logs": list(self.event_logs)}
         if command == "AGENT_QUERY":
             self.user_request = str(payload.get("text", "")).strip()
             self.gesture_controller.previous_mode = self.gesture_controller.mode
             self.gesture_controller.mode = ControlMode.AGENT_MODE
             self.last_agent_plan_time = 0.0
-            self.log_event("dashboard query: %s" % (self.user_request or "(empty)"))
+            self.log_event("%s query: %s" % (source, self.user_request or "(empty)"))
+            self.publish_robot_mode()
             return {"ok": True, "mode": self.gesture_controller.mode, "query": self.user_request, "event_logs": list(self.event_logs)}
         if command == "EMERGENCY_STOP":
             self.clear_manual_override()
-            self.gesture_controller.force_stop(source="web", gesture="button")
-            self.publish_stop("dashboard %s" % command)
-            self.log_event("dashboard: %s" % command)
+            self.gesture_controller.force_stop(source=source, gesture="command")
+            self.publish_stop("%s %s" % (source, command))
+            self.log_event("%s: %s" % (source, command))
+            self.publish_led_command("OFF")
+            self.publish_robot_mode()
+            return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
+        if command == "SLEEP":
+            self.enter_sleep(source)
+            return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
+        if command == "WAKE":
+            self.wake_robot(source)
             return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
         if command == "STOP":
             self.clear_manual_override()
             self.gesture_controller.handle_web_command("PAUSE")
-            self.publish_stop("dashboard STOP")
-            self.log_event("dashboard: STOP")
+            self.publish_stop("%s STOP" % source)
+            self.log_event("%s: STOP" % source)
+            self.publish_robot_mode()
             return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
         if command in ("PAUSE_FOLLOW", "PAUSE"):
             result = self.gesture_controller.handle_web_command("PAUSE")
-            self.log_event("dashboard: PAUSE_FOLLOW")
+            self.log_event("%s: PAUSE_FOLLOW" % source)
             result["event_logs"] = list(self.event_logs)
+            self.publish_robot_mode()
             return result
         if command == "START_FOLLOW":
             result = self.gesture_controller.handle_web_command("START_FOLLOW")
-            self.log_event("dashboard: START_FOLLOW")
+            self.log_event("%s: START_FOLLOW" % source)
             result["event_logs"] = list(self.event_logs)
+            self.publish_robot_mode()
             return result
         if command in ("FORWARD", "BACKWARD", "TURN_LEFT", "TURN_RIGHT"):
+            if self.gesture_controller.mode == ControlMode.SLEEP:
+                self.publish_sleep_zero("sleep blocks manual motion")
+                return {"ok": False, "mode": self.gesture_controller.mode, "message": "SLEEP mode blocks motion"}
             self.start_manual_override(command)
-            self.log_event("dashboard manual motion: %s" % command)
+            self.log_event("%s manual motion: %s" % (source, command))
             return {"ok": True, "mode": self.gesture_controller.mode, "action": command, "event_logs": list(self.event_logs)}
         if command == "CLEAR_LOGS":
             self.gesture_controller.handle_web_command("CLEAR_LOGS")
@@ -298,6 +370,37 @@ class PersonFollowerNode(Node):
             self.event_logs.clear()
             return {"ok": True, "message": "logs cleared", "event_logs": []}
         return self.gesture_controller.handle_web_command(command)
+
+    def enter_sleep(self, source: str) -> None:
+        """进入软件休眠：停止底盘/云台，暂停手势动作和 Agent 动作。"""
+        self.clear_manual_override()
+        self.robot_executor.update_plan({"action": "STOP", "reason": "sleep mode", "speak": ""})
+        self.gesture_controller._apply_action("SLEEP", source=source, gesture="command")
+        self.latest_agent_error = ""
+        self.publish_sleep_zero("%s: SLEEP" % source)
+        self.publish_led_command("OFF")
+        self.log_event("%s: SLEEP" % source)
+        self.publish_robot_mode()
+
+    def wake_robot(self, source: str) -> None:
+        """从软件休眠恢复；如果当前是急停，则保持急停。"""
+        if self.gesture_controller.mode == ControlMode.EMERGENCY_STOP:
+            self.publish_stop("WAKE blocked by EMERGENCY_STOP")
+            self.log_event("%s: WAKE blocked by EMERGENCY_STOP" % source)
+            self.publish_robot_mode()
+            return
+        self.gesture_controller._apply_action("WAKE", source=source, gesture="command")
+        self.publish_led_command("ON")
+        self.publish_stop("%s: WAKE" % source)
+        self.log_event("%s: WAKE -> %s" % (source, self.gesture_controller.mode))
+        self.publish_robot_mode()
+
+    def handle_dashboard_command(self, command: str, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
+        """处理 Dashboard 按钮和 Agent 查询。"""
+        payload = payload or {}
+        command = command.upper()
+        self.publish_robot_command(command)
+        return self.apply_robot_command(command, source="dashboard", payload=payload)
 
     def handle_dashboard_settings(self, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
         """读取或更新 Dashboard 运行时设置。不会直接写磁盘配置文件。"""
@@ -366,9 +469,14 @@ class PersonFollowerNode(Node):
             "dashboard_version": DASHBOARD_VERSION,
             "camera_topic": self.camera_topic,
             "cmd_vel_topic": self.cmd_vel_topic,
+            "cmd_gimbal_topic": self.cmd_gimbal_topic,
+            "robot_mode_topic": self.robot_mode_topic,
+            "robot_command_topic": self.robot_command_topic,
+            "led_command_topic": self.led_command_topic,
             "robot_ip": self.robot_ip,
             "battery": self.battery_percent,
             "mode": self.gesture_controller.mode,
+            "sleeping": self.gesture_controller.mode == ControlMode.SLEEP,
             "fps": round(self.fps, 2),
             "yolo_status": yolo_status,
             "hand_status": hand_status,
@@ -433,18 +541,19 @@ class PersonFollowerNode(Node):
 
             gestures: List[GestureResult] = []
             best = None
-            if self.gesture_detector is not None:
+            sleep_mode = self.gesture_controller.mode == ControlMode.SLEEP
+            if self.gesture_detector is not None and not sleep_mode:
                 gestures = self.gesture_detector.detect(frame)
                 self.gesture_detector.draw(annotated, gestures)
                 best = best_gesture(gestures)
 
             triggered, gesture_state = self.gesture_debouncer.update(best)
-            if best is not None and best.gesture == "open_palm":
+            if best is not None and best.gesture == "open_palm" and not sleep_mode:
                 if self.gesture_controller.mode != ControlMode.EMERGENCY_STOP:
                     self.gesture_controller.force_stop(source="gesture_immediate", gesture="open_palm")
                     self.log_event("gesture: open_palm immediate stop")
                 self.publish_stop("open_palm immediate stop")
-            if triggered is not None:
+            if triggered is not None and not sleep_mode:
                 self.gesture_controller.handle_stable_gesture(triggered)
                 self.log_event("stable gesture: %s" % triggered)
             self.gesture_controller.publish_state(gesture_state, best)
@@ -464,7 +573,8 @@ class PersonFollowerNode(Node):
                 if target is not None:
                     self.last_target_time = now
 
-            self._maybe_start_agent_job(frame, people, gestures, target)
+            if not sleep_mode:
+                self._maybe_start_agent_job(frame, people, gestures, target)
 
             if self.publish_debug_image:
                 self.gesture_debug_pub.publish(self.bridge.cv2_to_imgmsg(annotated, encoding="bgr8"))
@@ -508,6 +618,8 @@ class PersonFollowerNode(Node):
         """按固定间隔启动后台 Agent 推理，避免阻塞图像回调。"""
         if not self.agent_enabled:
             return
+        if self.gesture_controller.mode == ControlMode.SLEEP:
+            return
         if self.gesture_controller.mode != ControlMode.AGENT_MODE:
             return
         now = now_sec()
@@ -539,8 +651,12 @@ class PersonFollowerNode(Node):
     ) -> None:
         """后台调用 VLM 和 LLM，生成动作计划。"""
         try:
+            if self.gesture_controller.mode == ControlMode.SLEEP:
+                return
             height, width = frame.shape[:2]
             vision = self.vision_agent.describe(frame)
+            if self.gesture_controller.mode == ControlMode.SLEEP:
+                return
             scene = build_scene_summary(
                 people=people,
                 gestures=gestures,
@@ -556,6 +672,8 @@ class PersonFollowerNode(Node):
                 mode=self.gesture_controller.mode,
                 user_request=self.user_request,
             )
+            if self.gesture_controller.mode == ControlMode.SLEEP:
+                return
             self.robot_executor.update_plan(planner.plan, planner.latency_ms, planner.tokens)
             self.log_event("agent plan: %s - %s" % (planner.plan.get("action"), planner.plan.get("reason")))
             with self.lock:
@@ -579,6 +697,14 @@ class PersonFollowerNode(Node):
             target = self.latest_target
             last_image_time = self.last_image_time
             last_target_time = self.last_target_time
+
+        mode = self.gesture_controller.mode
+        if mode == ControlMode.SLEEP:
+            self.publish_sleep_zero("mode SLEEP")
+            return
+        if mode == ControlMode.EMERGENCY_STOP:
+            self.publish_stop("mode EMERGENCY_STOP")
+            return
 
         if frame is None:
             self.publish_stop("no image")
@@ -605,10 +731,9 @@ class PersonFollowerNode(Node):
             self.clear_manual_override()
 
         override_cmd, action_name = self.gesture_controller.get_override_cmd()
-        mode = self.gesture_controller.mode
         self.latest_action = action_name
 
-        if mode in (ControlMode.IDLE, ControlMode.EMERGENCY_STOP, ControlMode.PATROL_READY):
+        if mode in (ControlMode.IDLE, ControlMode.PATROL_READY):
             self.publish_stop("mode %s" % mode)
             return
 
@@ -653,6 +778,7 @@ class PersonFollowerNode(Node):
 
     def _publish_cmd(self, safe_cmd: Twist, raw_cmd: Twist, reason: str, safety_reason: str) -> None:
         self.cmd_pub.publish(safe_cmd)
+        self.gimbal_pub.publish(Twist())
         self.latest_cmd = raw_cmd
         self.latest_safe_cmd = safe_cmd
         self.latest_reason = reason
@@ -661,10 +787,16 @@ class PersonFollowerNode(Node):
     def publish_stop(self, reason: str = "stop") -> None:
         stop = Twist()
         self.cmd_pub.publish(stop)
+        self.gimbal_pub.publish(Twist())
         self.latest_cmd = stop
         self.latest_safe_cmd = stop
         self.latest_reason = reason
         self.latest_safety_reason = "stop"
+
+    def publish_sleep_zero(self, reason: str = "sleep") -> None:
+        """SLEEP 模式持续输出底盘和云台零速度，确保软件休眠保持静止。"""
+        self.publish_stop(reason)
+        self.latest_safety_reason = "sleep zero"
 
     def _status_dict(self) -> Dict[str, object]:
         target = self.latest_target
@@ -711,6 +843,10 @@ class PersonFollowerNode(Node):
             "mode": self.gesture_controller.mode,
             "camera_topic": self.camera_topic,
             "cmd_vel_topic": self.cmd_vel_topic,
+            "cmd_gimbal_topic": self.cmd_gimbal_topic,
+            "robot_mode_topic": self.robot_mode_topic,
+            "robot_command_topic": self.robot_command_topic,
+            "led_command_topic": self.led_command_topic,
             "robot_ip": self.robot_ip,
             "people_count": len(self.latest_people),
             "target": target_info,
@@ -719,6 +855,7 @@ class PersonFollowerNode(Node):
             "gesture_enabled": self.gesture_enabled,
             "gesture_logs": list(self.gesture_controller.logs),
             "runtime_settings": self.current_settings(),
+            "sleeping": self.gesture_controller.mode == ControlMode.SLEEP,
             "scene": self.latest_scene,
             "agent": {
                 "enabled": self.agent_enabled,

@@ -349,6 +349,30 @@ open_palm -> 立即 stop
 
 ## ROS2 Topic
 
+Robot mode:
+
+```bash
+ros2 topic echo /robot/mode
+```
+
+Robot command:
+
+```bash
+ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'SLEEP'}"
+ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'WAKE'}"
+ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'START_FOLLOW'}"
+ros2 topic pub --once /robot/command std_msgs/msg/String "{data: 'EMERGENCY_STOP'}"
+```
+
+SLEEP mode behavior:
+
+- publish zero velocity to `/cmd_vel`;
+- publish zero velocity to `/cmd_gimbal`;
+- block gesture-triggered actions;
+- pause Agent/VLM/LLM decision jobs;
+- publish `OFF` to `/robot/led_command` for an external LED bridge;
+- keep the robot still even when image, AI, or Dashboard errors happen.
+
 手势状态：
 
 ```bash

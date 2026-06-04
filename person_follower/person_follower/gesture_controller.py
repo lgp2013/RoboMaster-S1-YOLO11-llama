@@ -17,6 +17,7 @@ class ControlMode:
     PATROL_READY = "PATROL_READY"
     AGENT_MODE = "AGENT_MODE"
     EMERGENCY_STOP = "EMERGENCY_STOP"
+    SLEEP = "SLEEP"
 
 
 class GestureDebouncer:
@@ -148,6 +149,24 @@ class GestureController:
             self.mode = ControlMode.EMERGENCY_STOP if self.emergency_stop_enabled else ControlMode.IDLE
             self.action_name = "STOP"
             self._publish_zero()
+        elif action == "SLEEP":
+            # 软件休眠只切换内部模式并停止动作，唤醒时可恢复 previous_mode。
+            if self.mode != ControlMode.SLEEP:
+                self.previous_mode = self.mode if self.mode != ControlMode.EMERGENCY_STOP else ControlMode.IDLE
+            self.mode = ControlMode.SLEEP
+            self.action_name = "SLEEP"
+            self.action_started_at = 0.0
+            self.action_until = 0.0
+            self.action_cmd = Twist()
+            self._publish_zero()
+        elif action == "WAKE":
+            # 急停优先级最高，WAKE 不解除 EMERGENCY_STOP。
+            if self.mode == ControlMode.EMERGENCY_STOP:
+                self.action_name = "WAKE_BLOCKED_BY_EMERGENCY_STOP"
+            else:
+                restore_mode = self.previous_mode if self.previous_mode not in ("", ControlMode.SLEEP, ControlMode.EMERGENCY_STOP) else ControlMode.IDLE
+                self.mode = restore_mode
+                self.action_name = "WAKE"
         elif action == "START_FOLLOW":
             if self.follow_mode_enabled:
                 self.previous_mode = self.mode
