@@ -1,15 +1,12 @@
-"""Tracking and safety control logic for RoboMaster S1 person follower."""
+"""Tracking and follow control helpers for the RoboMaster S1."""
 
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from geometry_msgs.msg import Twist
 
+from .utils import clamp
 from .yolo_detector import PersonDetection
-
-
-def clamp(value: float, min_value: float, max_value: float) -> float:
-    return max(min_value, min(max_value, value))
 
 
 @dataclass
@@ -23,22 +20,32 @@ class ControlConfig:
     min_angular_speed: float
     target_bbox_height_ratio: float
     bbox_height_tolerance: float
+    target_distance_m: float
     enable_backward: bool
     enable_auto_move: bool
-    # Gimbal control parameters
+    gimbal_target_y_ratio: float = 0.38
+    gimbal_frame_center_y_ratio: float = 0.42
     gimbal_yaw_gain: float = 2.0
     gimbal_pitch_gain: float = 1.5
     max_gimbal_yaw_speed: float = 2.0
     max_gimbal_pitch_speed: float = 1.5
     min_gimbal_speed: float = 0.1
     gimbal_deadzone_px: int = 20
+    gimbal_vertical_deadzone_px: int = 12
 
 
 class PersonFollowerController:
-    """完全基于 YOLO 检测框的跟随控制器，不使用 OpenCV Tracker。"""
+    """Compute chassis and gimbal commands from YOLO person detections."""
 
     def __init__(self, config: ControlConfig) -> None:
         self.config = config
+
+    def _desired_bbox_height_ratio(self) -> float:
+        reference_distance_m = 1.0
+        desired_ratio = self.config.target_bbox_height_ratio * (
+            reference_distance_m / max(0.6, float(self.config.target_distance_m))
+        )
+        return clamp(desired_ratio, 0.32, 0.78)
 
     def compute_cmd(
         self,
@@ -50,8 +57,6 @@ class PersonFollowerController:
         if target is None:
             return cmd, "no target", 0.0
 
-        # 横向误差：目标在右侧时 error > 0。ROS 中 angular.z 正值为左转，
-        # 所以向右转需要负角速度。
         error_x = target.center_x - frame_width / 2.0
         if abs(error_x) > self.config.center_threshold_px:
             normalized_error = error_x / max(1.0, frame_width / 2.0)
@@ -62,7 +67,8 @@ class PersonFollowerController:
             cmd.angular.z = angular
 
         bbox_height_ratio = target.height / max(1.0, float(frame_height))
-        distance_error = self.config.target_bbox_height_ratio - bbox_height_ratio
+        desired_bbox_height_ratio = self._desired_bbox_height_ratio()
+        distance_error = desired_bbox_height_ratio - bbox_height_ratio
         if self.config.enable_auto_move and abs(distance_error) > self.config.bbox_height_tolerance:
             linear = self.config.distance_gain * distance_error
             linear = clamp(linear, -self.config.max_linear_speed, self.config.max_linear_speed)
@@ -74,6 +80,7 @@ class PersonFollowerController:
 
         reason = (
             f"error_x={error_x:.1f}, bbox_height_ratio={bbox_height_ratio:.3f}, "
+            f"target_bbox_ratio={desired_bbox_height_ratio:.3f}, "
             f"linear={cmd.linear.x:.2f}, angular={cmd.angular.z:.2f}"
         )
         return cmd, reason, bbox_height_ratio
@@ -84,24 +91,17 @@ class PersonFollowerController:
         frame_width: int,
         frame_height: int,
     ) -> Tuple[Twist, str]:
-        """计算云台控制命令，根据人物位置调整俯仰和偏航。
-        
-        俯仰（pitch）：根据人物在画面中的垂直位置调整
-        偏航（yaw）：根据人物在画面中的水平位置调整
-        """
         gimbal_cmd = Twist()
         if target is None:
             return gimbal_cmd, "no target for gimbal"
 
-        # 水平误差：目标在右侧时 error_x > 0
-        error_x = target.center_x - frame_width / 2.0
-        
-        # 垂直误差：目标在下方时 error_y > 0（画面坐标系y向下）
-        # 人物在画面上方（y小）-> 需要向上看（pitch负）
-        # 人物在画面下方（y大）-> 需要向下看（pitch正）
-        error_y = target.center_y - frame_height / 2.0
+        aim_x = target.center_x
+        aim_y = target.y1 + target.height * self.config.gimbal_target_y_ratio
+        desired_frame_y = frame_height * self.config.gimbal_frame_center_y_ratio
 
-        # 计算偏航速度（yaw）- 左右跟踪
+        error_x = aim_x - frame_width / 2.0
+        error_y = aim_y - desired_frame_y
+
         if abs(error_x) > self.config.gimbal_deadzone_px:
             normalized_error_x = error_x / max(1.0, frame_width / 2.0)
             yaw_speed = -self.config.gimbal_yaw_gain * normalized_error_x
@@ -110,8 +110,7 @@ class PersonFollowerController:
                 yaw_speed = self.config.min_gimbal_speed if yaw_speed > 0 else -self.config.min_gimbal_speed
             gimbal_cmd.angular.z = yaw_speed
 
-        # 计算俯仰速度（pitch）- 上下跟踪
-        if abs(error_y) > self.config.gimbal_deadzone_px:
+        if abs(error_y) > self.config.gimbal_vertical_deadzone_px:
             normalized_error_y = error_y / max(1.0, frame_height / 2.0)
             pitch_speed = self.config.gimbal_pitch_gain * normalized_error_y
             pitch_speed = clamp(pitch_speed, -self.config.max_gimbal_pitch_speed, self.config.max_gimbal_pitch_speed)
@@ -127,7 +126,7 @@ class PersonFollowerController:
 
 
 class SafetyGuard:
-    """最终安全层：限制速度、处理丢失目标和异常命令。"""
+    """Legacy local safety helper kept for compatibility."""
 
     def __init__(
         self,
@@ -148,8 +147,6 @@ class SafetyGuard:
 
         safe.linear.x = clamp(cmd.linear.x, -self.max_linear_speed, self.max_linear_speed)
         safe.angular.z = clamp(cmd.angular.z, -self.max_angular_speed, self.max_angular_speed)
-
-        # S1 跟随只需要前后和原地旋转，禁止横移和其他轴。
         safe.linear.y = 0.0
         safe.linear.z = 0.0
         safe.angular.x = 0.0

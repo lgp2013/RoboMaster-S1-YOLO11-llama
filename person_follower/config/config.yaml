@@ -19,9 +19,9 @@ person_follower:
     control_rate_hz: 15.0
     center_threshold_px: 45
     yaw_gain: 1.2
-    distance_gain: 0.8
-    max_linear_speed: 0.30
-    min_linear_speed: 0.06
+    distance_gain: 1.1
+    max_linear_speed: 0.35
+    min_linear_speed: 0.07
     max_angular_speed: 1.0
     min_angular_speed: 0.10
 
@@ -29,7 +29,7 @@ person_follower:
     # target_bbox_height_ratio ~ 0.6 means person is about 1 meter away
     target_distance_m: 1.0
     target_bbox_height_ratio: 0.60
-    bbox_height_tolerance: 0.05
+    bbox_height_tolerance: 0.04
 
     # Safety.
     lost_target_timeout_sec: 3.0
@@ -39,12 +39,15 @@ person_follower:
     enable_auto_move: true
 
     # Gimbal auto-tracking parameters (aggressive tracking)
-    gimbal_yaw_gain: 3.0           # Higher gain for faster yaw response
-    gimbal_pitch_gain: 2.5         # Higher gain for faster pitch response
+    gimbal_target_y_ratio: 0.38    # Track upper torso to keep the head in frame
+    gimbal_frame_center_y_ratio: 0.42  # Keep target slightly above frame center
+    gimbal_yaw_gain: 3.2           # Higher gain for faster yaw response
+    gimbal_pitch_gain: 3.0         # Higher gain for faster pitch response
     max_gimbal_yaw_speed: 3.0      # Maximum yaw speed (rad/s)
-    max_gimbal_pitch_speed: 2.0    # Maximum pitch speed (rad/s)
+    max_gimbal_pitch_speed: 2.4    # Maximum pitch speed (rad/s)
     min_gimbal_speed: 0.05         # Minimum gimbal speed to overcome friction
-    gimbal_deadzone_px: 10         # Small deadzone for responsive tracking
+    gimbal_deadzone_px: 8          # Small deadzone for responsive tracking
+    gimbal_vertical_deadzone_px: 6 # Separate vertical deadzone for faster pitch tracking
 
     # MediaPipe Hands gesture recognition.
     gesture:
