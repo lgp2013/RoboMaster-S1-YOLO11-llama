@@ -406,12 +406,12 @@ async function openDetailModal(type) {
   state.currentDetailType = type;
   state.currentDetailData = payload.data || {};
   document.getElementById("detailModalTitle").textContent = meta.title[state.lang] || meta.title.en;
-  document.getElementById("detailModal").classList.add("open");
+  document.getElementById("detailModal")?.setAttribute("aria-hidden", "false");
   renderDetailModal(type, state.currentDetailData);
 }
 
 function closeDetailModal() {
-  document.getElementById("detailModal").classList.remove("open");
+  document.getElementById("detailModal")?.setAttribute("aria-hidden", "true");
   state.currentDetailType = "";
   state.currentDetailData = {};
 }
@@ -701,17 +701,19 @@ function bindDetailTriggers() {
   document.getElementById("rosDetailsToggle")?.addEventListener("click", () => openDetailModal("telemetry"));
 }
 
+function openSettingsModal() {
+  document.getElementById("settingsModal")?.setAttribute("aria-hidden", "false");
+}
+
+function closeSettingsModal() {
+  document.getElementById("settingsModal")?.setAttribute("aria-hidden", "true");
+}
+
 function bindSettingsModal() {
-  document.getElementById("settingsToggle")?.addEventListener("click", () => {
-    document.getElementById("settingsModal").classList.add("open");
-  });
-  document.getElementById("settingsClose")?.addEventListener("click", () => {
-    document.getElementById("settingsModal").classList.remove("open");
-  });
+  document.getElementById("settingsToggle")?.addEventListener("click", openSettingsModal);
+  document.getElementById("settingsClose")?.addEventListener("click", closeSettingsModal);
   document.getElementById("settingsModal")?.addEventListener("click", (event) => {
-    if (event.target?.id === "settingsModal") {
-      document.getElementById("settingsModal").classList.remove("open");
-    }
+    if (event.target?.id === "settingsModal") closeSettingsModal();
   });
   document.getElementById("settingsReload")?.addEventListener("click", loadSettings);
   document.getElementById("settingsSave")?.addEventListener("click", saveSettings);
