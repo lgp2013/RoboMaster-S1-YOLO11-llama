@@ -65,6 +65,13 @@ const i18n = {
     offline: "offline",
     standby: "standby",
     unknown: "unknown",
+    topLinked: "ok",
+    topLost: "lost",
+    topOnline: "on",
+    topOffline: "off",
+    topStandby: "idle",
+    topUnknown: "unk",
+    topThinking: "run",
     connected: "CONNECTED",
     disconnected: "DISCONNECTED",
     thinking: "THINKING",
@@ -138,6 +145,13 @@ const i18n = {
     offline: "离线",
     standby: "待命",
     unknown: "未知",
+    topLinked: "连接",
+    topLost: "断开",
+    topOnline: "在线",
+    topOffline: "离线",
+    topStandby: "待机",
+    topUnknown: "未知",
+    topThinking: "运行",
     connected: "已连接",
     disconnected: "未连接",
     thinking: "推理中",
@@ -168,6 +182,18 @@ function localizeValue(value) {
   if (value === false) return t("offline");
   const key = String(value || "").toLowerCase();
   return i18n[state.lang]?.[key] || value;
+}
+
+function compactStatus(value) {
+  const key = String(value || "").toLowerCase();
+  if (key === "linked" || key === "connected" || key === "ok") return t("topLinked");
+  if (key === "lost" || key === "disconnected") return t("topLost");
+  if (key === "online") return t("topOnline");
+  if (key === "offline") return t("topOffline");
+  if (key === "standby") return t("topStandby");
+  if (key === "unknown") return t("topUnknown");
+  if (key === "thinking") return t("topThinking");
+  return localizeValue(value);
 }
 
 function applyLanguage() {
@@ -259,14 +285,14 @@ function renderStatus(data = {}) {
   const navStatus = data.nav_status || "standby";
   const compute = data.ai_compute || {};
 
-  setText("rosState", data.connected ? t("linked") : t("lost"));
-  setText("cameraState", localizeValue(cameraStatus));
-  setText("yoloState", localizeValue(yoloStatus));
-  setText("handState", localizeValue(handStatus));
-  setText("vlmState", localizeValue(vlmStatus));
-  setText("llmState", localizeValue(llmStatus));
-  setText("agentTopState", localizeValue(agentStatus));
-  setText("navState", localizeValue(navStatus));
+  setText("rosState", data.connected ? t("topLinked") : t("topLost"));
+  setText("cameraState", compactStatus(cameraStatus));
+  setText("yoloState", compactStatus(yoloStatus));
+  setText("handState", compactStatus(handStatus));
+  setText("vlmState", compactStatus(vlmStatus));
+  setText("llmState", compactStatus(llmStatus));
+  setText("agentTopState", compactStatus(agentStatus));
+  setText("navState", compactStatus(navStatus));
   setText("connectedBadge", data.connected ? t("connected") : t("disconnected"));
   setText("videoBadge", cameraStatus === "online" ? t("online").toUpperCase() : t("standby").toUpperCase());
 

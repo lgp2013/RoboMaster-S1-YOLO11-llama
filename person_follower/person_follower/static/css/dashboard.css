@@ -53,7 +53,7 @@ body {
 }
 
 .topbar {
-  height: 72px;
+  height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -61,6 +61,13 @@ body {
   padding: 12px 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(5, 13, 10, 0.92);
+}
+
+.brand-block {
+  flex: 0 1 360px;
+  min-width: 180px;
+  max-width: 420px;
+  overflow: hidden;
 }
 
 .brand-kicker {
@@ -71,8 +78,12 @@ body {
 
 h1 {
   margin: 3px 0 0;
-  font-size: clamp(18px, 1.55vw, 28px);
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(17px, 1.45vw, 26px);
   font-weight: 800;
+  line-height: 1.08;
+  text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -84,15 +95,17 @@ h1 {
   flex: 1 1 auto;
   justify-content: flex-end;
   min-width: 0;
+  overflow: hidden;
 }
 
 .status-pill, .clock {
-  min-width: 66px;
+  flex: 0 0 auto;
+  min-width: 62px;
   height: 38px;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 7px;
+  padding: 0 6px;
   background: rgba(19, 34, 30, 0.86);
   border: 1px solid var(--line);
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
@@ -117,7 +130,7 @@ h1 {
 }
 .status-pill strong, .clock { color: var(--cyan); font-weight: 800; }
 .status-pill strong {
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
   word-break: keep-all;
 }
@@ -134,7 +147,7 @@ h1 {
 .lamp.standby { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
 
 .console-shell {
-  height: calc(100vh - 72px);
+  height: calc(100vh - 76px);
   display: grid;
   grid-template-columns: minmax(680px, 1fr) 430px;
   grid-template-rows: minmax(430px, 1fr) 230px;
@@ -680,11 +693,14 @@ button.danger:hover {
   .console-shell {
     grid-template-columns: minmax(620px, 1fr) 380px;
     grid-template-rows: minmax(390px, 1fr) 210px;
+    height: calc(100vh - 76px);
     gap: 10px;
     padding: 10px;
   }
-  .topbar { height: 64px; }
+  .topbar { height: 76px; padding: 10px 14px; }
+  .brand-block { flex-basis: 280px; }
   .status-pill, .clock { min-width: 70px; }
+  .status-pill { min-width: 62px; }
   .metric strong { font-size: 17px; }
   .control-grid { grid-auto-rows: minmax(52px, 1fr); }
 }
