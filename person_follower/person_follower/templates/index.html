@@ -17,8 +17,13 @@
     </div>
     <div class="top-status">
       <button class="status-pill status-button" id="rosDetailsToggle" type="button"><span class="lamp" id="rosLamp"></span><span>ROS</span><strong id="rosState">--</strong></button>
-      <div class="status-pill"><span class="lamp" id="llmLamp"></span><span>LLM</span><strong id="llmState">--</strong></div>
       <div class="status-pill"><span class="lamp" id="cameraLamp"></span><span>CAM</span><strong id="cameraState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="yoloLamp"></span><span>YOLO</span><strong id="yoloState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="handLamp"></span><span>HAND</span><strong id="handState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="vlmLamp"></span><span>VLM</span><strong id="vlmState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="llmLamp"></span><span>LLM</span><strong id="llmState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="agentLamp"></span><span>AGENT</span><strong id="agentTopState">--</strong></div>
+      <div class="status-pill"><span class="lamp" id="navLamp"></span><span>NAV</span><strong id="navState">--</strong></div>
       <button class="settings-toggle" id="settingsToggle" type="button" data-i18n="settings">SETTINGS</button>
       <button class="lang-toggle" id="langToggle" type="button">中文</button>
       <div class="clock" id="clock">--:--:--</div>
@@ -58,6 +63,8 @@
           <div class="metric"><span>ANGULAR Z</span><strong id="angularZ">--</strong></div>
           <div class="metric"><span data-i18n="targetShort">TARGET</span><strong id="target">--</strong></div>
           <div class="metric"><span data-i18n="gestureShort">GESTURE</span><strong id="gesture">--</strong></div>
+          <div class="metric"><span data-i18n="aiLoad">AI LOAD</span><strong id="aiLoad">--</strong></div>
+          <div class="metric"><span data-i18n="modelState">MODEL</span><strong id="modelState">--</strong></div>
         </div>
       </section>
 
@@ -72,6 +79,15 @@
             <span><span data-i18n="latency">Latency</span> <strong id="agentLatency">--</strong></span>
             <span><span data-i18n="tokens">Tokens</span> <strong id="agentTokens">--</strong></span>
           </div>
+          <div class="radar-block" aria-label="Mini map radar">
+            <div class="radar-scope"><i></i><b id="radarDot"></b></div>
+            <div class="radar-readout">
+              <span data-i18n="miniMap">MINI MAP</span>
+              <strong id="radarState">--</strong>
+            </div>
+          </div>
+          <label data-i18n="agentLog">Agent Reasoning Log</label>
+          <ul id="agentLog" class="agent-log"></ul>
         </div>
         <div class="agent-query">
           <input id="agentQuery" data-i18n-placeholder="agentPlaceholder" placeholder="任务：你看到了什么？ / 帮我找水杯 / 跟着我">

@@ -55,6 +55,7 @@ person_follower/
 ├── setup.py
 ├── setup.cfg
 ├── requirements.txt
+├── requirements-mediapipe-optional.txt
 ├── README.md
 ├── resource/
 │   └── person_follower
@@ -77,7 +78,14 @@ person_follower/
     ├── flask_dashboard.py
     ├── follower_control.py
     ├── safety.py
-    └── utils.py
+    ├── utils.py
+    ├── templates/
+    │   └── index.html
+    └── static/
+        ├── css/
+        │   └── dashboard.css
+        └── js/
+            └── dashboard.js
 ```
 
 `person_follower_node.py` 和 `flask_dashboard.py` 是兼容入口，新的主实现分别在 `follower_node.py` 和 `web_dashboard.py`。
@@ -131,11 +139,17 @@ python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r src/person
 
 ```bash
 python3 -c "from ultralytics import YOLO; print('ultralytics ok')"
-python3 -c "import mediapipe as mp; print(mp.__version__)"
 python3 -c "import requests; print('requests ok')"
 ```
 
-说明：Ubuntu 20.04 + Python3.8 下，`requirements.txt` 固定使用 `mediapipe==0.10.11`。
+说明：Ubuntu 20.04 + Python3.8 下，不同 pip 源对 `mediapipe` / `jaxlib` 的 wheel 支持不稳定，所以主 `requirements.txt` 不再强制安装 MediaPipe。未安装 MediaPipe 时，主节点仍可运行，手势识别会自动降级为禁用。
+
+如果你确认当前 Python 环境能安装 MediaPipe，再手动执行：
+
+```bash
+python3 -m pip install -r src/person_follower/requirements-mediapipe-optional.txt
+python3 -c "import mediapipe as mp; print(mp.__version__)"
+```
 
 ## 构建
 

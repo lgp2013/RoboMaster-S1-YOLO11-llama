@@ -28,7 +28,7 @@ person_follower:
 
     # Safety.
     lost_target_timeout_sec: 0.8
-    command_timeout_sec: 0.5
+    command_timeout_sec: 1.2
     image_timeout_sec: 1.0
     enable_backward: true
     enable_auto_move: true

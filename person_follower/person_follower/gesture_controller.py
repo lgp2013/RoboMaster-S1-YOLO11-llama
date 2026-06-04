@@ -90,6 +90,7 @@ class GestureController:
         self.turn_angular_speed = abs(float(turn_angular_speed))
         self.action_duration_sec = float(action_duration_sec)
         self.action_until = 0.0
+        self.action_started_at = 0.0
         self.action_cmd = Twist()
         self.action_name = "NONE"
         self.logs: Deque[Dict[str, object]] = deque(maxlen=10)
@@ -137,6 +138,7 @@ class GestureController:
         self._publish_zero()
         self.mode = self.previous_mode if self.previous_mode in (ControlMode.FOLLOW, ControlMode.IDLE) else ControlMode.IDLE
         self.action_name = "DONE"
+        self.action_started_at = 0.0
         return None, self.action_name
 
     def _apply_action(self, action: str, source: str, gesture: str) -> None:
@@ -185,6 +187,7 @@ class GestureController:
         self.previous_mode = self.mode if self.mode != ControlMode.GESTURE_CONTROL else self.previous_mode
         self.mode = ControlMode.GESTURE_CONTROL
         self.action_name = action
+        self.action_started_at = time.time()
         self.action_until = time.time() + self.action_duration_sec
         self.action_cmd = make_twist(0.0, angular_z)
 

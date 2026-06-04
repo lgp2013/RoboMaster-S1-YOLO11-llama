@@ -8,6 +8,8 @@ const i18n = {
     vectorShort: "VECTOR",
     robotTelemetry: "ROBOT TELEMETRY",
     battery: "BATTERY",
+    aiLoad: "AI LOAD",
+    modelState: "MODEL",
     agentIntel: "AGENT INTEL",
     sceneUnderstanding: "Scene Understanding",
     actionPlan: "Action Plan",
@@ -53,6 +55,8 @@ const i18n = {
     settingsFailed: "Settings update failed",
     vehicleDetails: "VEHICLE DETAILS",
     connection: "Connection",
+    miniMap: "MINI MAP",
+    agentLog: "Agent Reasoning Log",
     agentPlaceholder: "Task: What do you see? / Find the cup / Follow me",
     linked: "linked",
     lost: "lost",
@@ -76,6 +80,8 @@ const i18n = {
     vectorShort: "速度向量",
     robotTelemetry: "机器人遥测",
     battery: "电池",
+    aiLoad: "AI 算力",
+    modelState: "模型",
     agentIntel: "智能体情报",
     sceneUnderstanding: "场景理解",
     actionPlan: "行动计划",
@@ -121,6 +127,8 @@ const i18n = {
     settingsFailed: "设置更新失败",
     vehicleDetails: "车辆详情",
     connection: "连接状态",
+    miniMap: "迷你雷达",
+    agentLog: "Agent 推理日志",
     agentPlaceholder: "任务：你看到了什么？ / 帮我找水杯 / 跟着我",
     linked: "已连接",
     lost: "断开",
@@ -240,17 +248,33 @@ function renderStatus(data = {}) {
   const safe = data.safe_cmd || { linear_x: data.linear_x || 0, angular_z: data.angular_z || 0 };
   const target = data.target ? t("person") : localizeValue(data.target_name || "none");
   const cameraStatus = data.camera_status || "unknown";
+  const yoloStatus = data.yolo_status || "unknown";
+  const handStatus = data.hand_status || "unknown";
+  const vlmStatus = data.vlm_status || "standby";
   const llmStatus = data.llm_status || "standby";
+  const agentStatus = data.agent_status || agent.status || "standby";
+  const navStatus = data.nav_status || "standby";
+  const compute = data.ai_compute || {};
 
   setText("rosState", data.connected ? t("linked") : t("lost"));
-  setText("llmState", localizeValue(llmStatus));
   setText("cameraState", localizeValue(cameraStatus));
+  setText("yoloState", localizeValue(yoloStatus));
+  setText("handState", localizeValue(handStatus));
+  setText("vlmState", localizeValue(vlmStatus));
+  setText("llmState", localizeValue(llmStatus));
+  setText("agentTopState", localizeValue(agentStatus));
+  setText("navState", localizeValue(navStatus));
   setText("connectedBadge", data.connected ? t("connected") : t("disconnected"));
   setText("videoBadge", cameraStatus === "online" ? t("online").toUpperCase() : t("standby").toUpperCase());
 
   setLamp("rosLamp", data.connected ? "online" : false);
-  setLamp("llmLamp", llmStatus === "online" ? "online" : "standby");
   setLamp("cameraLamp", cameraStatus === "online" ? "online" : false);
+  setLamp("yoloLamp", yoloStatus === "online" ? "online" : false);
+  setLamp("handLamp", handStatus === "online" ? "online" : "standby");
+  setLamp("vlmLamp", vlmStatus === "online" ? "online" : "standby");
+  setLamp("llmLamp", llmStatus === "online" ? "online" : "standby");
+  setLamp("agentLamp", agentStatus === "online" || agentStatus === "thinking" ? "online" : "standby");
+  setLamp("navLamp", navStatus === "online" ? "online" : "standby");
 
   setText("mode", data.mode || "--");
   setText("hudMode", data.mode || "--");
@@ -264,12 +288,17 @@ function renderStatus(data = {}) {
   setText("gesture", localizeValue(data.gesture_name || gesture.candidate || gesture.current || "none"));
   setText("hudGesture", localizeValue(data.gesture_name || gesture.candidate || gesture.current || "none"));
   setText("hudVector", speedText(safe));
+  setText("aiLoad", agent.job_running ? t("thinking") : `${compute.latency_ms ?? agent.latency_ms ?? 0} ms`);
+  setText("modelState", compute.model || "--");
+  setText("radarState", target);
+  moveRadarDot(data.target);
 
   setText("agentState", agent.job_running ? t("thinking") : localizeValue(llmStatus).toUpperCase());
   setText("sceneText", agent.vision_description || data.scene?.description || t("noScene"));
   setText("agentPlan", JSON.stringify(agent.last_plan || {}, null, 2));
   setText("agentLatency", `${agent.latency_ms || 0} ms`);
   setText("agentTokens", agent.tokens?.total_tokens ?? 0);
+  renderAgentLogs(agent.logs || []);
 
   if (document.getElementById("robotDetailsModal")?.classList.contains("open")) {
     renderRobotDetails(data);
@@ -286,6 +315,40 @@ function renderLogs(logs, force = false) {
     const time = item.time || item.timestamp || "";
     return `<li><strong>${String(time).slice(0, 19)}</strong> ${escapeHtml(String(msg))}</li>`;
   }).join("");
+}
+
+function renderAgentLogs(logs = []) {
+  const el = document.getElementById("agentLog");
+  if (!el) return;
+  const recent = logs.slice(0, 20);
+  if (!recent.length) {
+    el.innerHTML = `<li>${escapeHtml(t("noScene"))}</li>`;
+    return;
+  }
+  el.innerHTML = recent.map((item) => {
+    const action = item.action || "STOP";
+    const reason = item.reason || item.message || "";
+    const latency = item.latency_ms == null ? "" : ` ${item.latency_ms}ms`;
+    return `<li><strong>${escapeHtml(String(action))}</strong>${escapeHtml(latency)} ${escapeHtml(String(reason))}</li>`;
+  }).join("");
+}
+
+function moveRadarDot(targetInfo) {
+  const dot = document.getElementById("radarDot");
+  if (!dot) return;
+  if (!targetInfo || targetInfo.center_x == null) {
+    dot.style.left = "50%";
+    dot.style.top = "50%";
+    dot.style.opacity = "0.35";
+    return;
+  }
+  const center = Number(targetInfo.center_x || 0);
+  const left = Math.max(20, Math.min(80, 50 + ((center - 320) / 320) * 30));
+  const size = Number(targetInfo.bbox_height_ratio || 0.3);
+  const top = Math.max(20, Math.min(78, 70 - size * 70));
+  dot.style.left = `${left}%`;
+  dot.style.top = `${top}%`;
+  dot.style.opacity = "1";
 }
 
 function escapeHtml(text) {

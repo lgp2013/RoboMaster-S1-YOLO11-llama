@@ -23,6 +23,7 @@ class RobotExecutor:
         self.turn_speed = abs(float(turn_speed))
         self.action_duration_sec = float(action_duration_sec)
         self.active_until = 0.0
+        self.active_started_at = 0.0
         self.active_cmd: Optional[Twist] = None
         self.active_action = "STOP"
         self.last_plan = {"action": "STOP", "reason": "not planned", "speak": ""}
@@ -56,6 +57,7 @@ class RobotExecutor:
         else:
             self.active_cmd = None
             self.active_until = 0.0
+            self.active_started_at = 0.0
             self.active_action = action
 
     def resolve(self, current_mode: str) -> Tuple[str, Optional[Twist], str]:
@@ -74,9 +76,11 @@ class RobotExecutor:
             return current_mode, None, reason
         if self.active_cmd is not None and time.time() <= self.active_until:
             return ControlMode.AGENT_MODE, self.active_cmd, reason
+        self.active_started_at = 0.0
         return current_mode, None, "agent action finished"
 
     def _start_motion(self, action: str, cmd: Twist) -> None:
         self.active_action = action
         self.active_cmd = cmd
-        self.active_until = time.time() + self.action_duration_sec
+        self.active_started_at = time.time()
+        self.active_until = self.active_started_at + self.action_duration_sec

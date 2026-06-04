@@ -70,7 +70,7 @@ body {
 
 h1 {
   margin: 3px 0 0;
-  font-size: clamp(20px, 2vw, 30px);
+  font-size: clamp(18px, 1.8vw, 30px);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -78,16 +78,16 @@ h1 {
 .top-status {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
 }
 
 .status-pill, .clock {
-  min-width: 110px;
+  min-width: 78px;
   height: 38px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 9px;
   background: rgba(19, 34, 30, 0.86);
   border: 1px solid var(--line);
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
@@ -107,6 +107,7 @@ h1 {
 
 .status-pill span:not(.lamp) { color: var(--muted); font-size: 11px; }
 .status-pill strong, .clock { color: var(--cyan); font-weight: 800; }
+.status-pill strong { font-size: 12px; }
 
 .lamp {
   width: 9px;
@@ -231,7 +232,7 @@ h1 {
 
 .right-stack {
   display: grid;
-  grid-template-rows: 280px minmax(0, 1fr);
+  grid-template-rows: 320px minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
 }
@@ -271,7 +272,7 @@ h1 {
 
 .agent-readout p, .agent-readout pre {
   margin: 0 0 10px;
-  max-height: 82px;
+  max-height: 74px;
   overflow: auto;
   color: var(--text);
   font-size: 12px;
@@ -294,6 +295,84 @@ h1 {
 }
 
 .agent-mini strong { color: var(--amber); }
+
+.radar-block {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px;
+  background: rgba(5, 13, 10, 0.54);
+  border: 1px solid rgba(120, 240, 228, 0.14);
+}
+
+.radar-scope {
+  position: relative;
+  width: 96px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(120, 240, 228, 0.38);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 28%, rgba(120, 240, 228, 0.10) 29% 30%, transparent 31% 58%, rgba(120, 240, 228, 0.10) 59% 60%, transparent 61%),
+    linear-gradient(rgba(120, 240, 228, 0.20), rgba(120, 240, 228, 0.20)) 50% 0 / 1px 100% no-repeat,
+    linear-gradient(90deg, rgba(120, 240, 228, 0.20), rgba(120, 240, 228, 0.20)) 0 50% / 100% 1px no-repeat,
+    rgba(3, 10, 8, 0.75);
+}
+
+.radar-scope i {
+  position: absolute;
+  inset: 50% 50% 0 50%;
+  width: 48px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+  transform-origin: 0 0;
+  animation: radarSweep 2.4s linear infinite;
+}
+
+.radar-scope b {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 14px var(--amber);
+}
+
+.radar-readout {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.radar-readout strong {
+  margin-top: 8px;
+  color: var(--cyan);
+  font-size: 16px;
+}
+
+.agent-log {
+  max-height: 74px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  overflow: auto;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.agent-log li { margin-bottom: 5px; }
+
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
 .agent-query {
   display: grid;
@@ -592,6 +671,7 @@ button.danger:hover {
     padding: 10px;
   }
   .topbar { height: 64px; }
+  .status-pill, .clock { min-width: 70px; }
   .metric strong { font-size: 17px; }
   .control-grid { grid-auto-rows: minmax(52px, 1fr); }
 }

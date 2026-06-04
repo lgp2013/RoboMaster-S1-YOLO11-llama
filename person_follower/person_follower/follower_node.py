@@ -20,7 +20,7 @@ from .planner_agent import PlannerAgent
 from .robot_executor import RobotExecutor
 from .safety import SafetyGuard
 from .scene_understanding import build_scene_summary
-from .utils import json_string_msg, now_sec, twist_to_dict
+from .utils import clamp, json_string_msg, now_sec, twist_to_dict
 from .vision_agent import VisionAgent
 from .web_dashboard import DASHBOARD_VERSION, DashboardServer
 from .yolo_detector import PersonDetection, YoloPersonDetector
@@ -135,6 +135,7 @@ class PersonFollowerNode(Node):
         self.event_logs: Deque[Dict[str, object]] = deque(maxlen=20)
         self.battery_percent = None
         self.manual_override_cmd: Optional[Twist] = None
+        self.manual_override_started_at = 0.0
         self.manual_override_until = 0.0
         self.manual_override_action = "NONE"
         self.last_image_time = 0.0
@@ -184,7 +185,7 @@ class PersonFollowerNode(Node):
             "target_bbox_height_ratio": 0.45,
             "bbox_height_tolerance": 0.08,
             "lost_target_timeout_sec": 0.8,
-            "command_timeout_sec": 0.5,
+            "command_timeout_sec": 1.2,
             "image_timeout_sec": 1.0,
             "enable_backward": True,
             "enable_auto_move": True,
@@ -316,9 +317,21 @@ class PersonFollowerNode(Node):
         self.agent_enabled = bool(settings.get("agent_enabled", self.agent_enabled))
 
         try:
-            self.robot_executor.forward_speed = abs(float(settings.get("manual_forward_speed", self.robot_executor.forward_speed)))
-            self.robot_executor.turn_speed = abs(float(settings.get("manual_turn_speed", self.robot_executor.turn_speed)))
-            self.robot_executor.action_duration_sec = float(settings.get("manual_action_duration", self.robot_executor.action_duration_sec))
+            self.robot_executor.forward_speed = clamp(
+                abs(float(settings.get("manual_forward_speed", self.robot_executor.forward_speed))),
+                0.0,
+                float(self.get_parameter("max_linear_speed").value),
+            )
+            self.robot_executor.turn_speed = clamp(
+                abs(float(settings.get("manual_turn_speed", self.robot_executor.turn_speed))),
+                0.0,
+                float(self.get_parameter("max_angular_speed").value),
+            )
+            self.robot_executor.action_duration_sec = clamp(
+                float(settings.get("manual_action_duration", self.robot_executor.action_duration_sec)),
+                0.1,
+                2.0,
+            )
         except Exception as exc:
             return {"ok": False, "message": "invalid speed setting: %s" % exc}
 
@@ -343,6 +356,11 @@ class PersonFollowerNode(Node):
 
     def core_data(self) -> Dict[str, object]:
         """设置弹窗展示的核心运行数据。"""
+        camera_online = (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False
+        yolo_status = "online" if self.yolo is not None else "offline"
+        hand_status = "online" if self.gesture_enabled and self.gesture_detector is not None else "standby"
+        vlm_status = "online" if self.vision_agent.enabled and not self.latest_agent_error else "standby"
+        llm_status = "online" if self.agent_enabled and not self.latest_agent_error else "standby"
         return {
             "dashboard_version": DASHBOARD_VERSION,
             "camera_topic": self.camera_topic,
@@ -351,8 +369,13 @@ class PersonFollowerNode(Node):
             "battery": self.battery_percent,
             "mode": self.gesture_controller.mode,
             "fps": round(self.fps, 2),
-            "llm_status": "online" if self.agent_enabled and not self.latest_agent_error else "standby",
-            "camera_status": "online" if (time.time() - self.last_image_time) < 2.0 else "offline",
+            "yolo_status": yolo_status,
+            "hand_status": hand_status,
+            "vlm_status": vlm_status,
+            "llm_status": llm_status,
+            "agent_status": "thinking" if self.agent_job_running else ("online" if self.agent_enabled else "standby"),
+            "nav_status": "standby",
+            "camera_status": "online" if camera_online else "offline",
             "last_error": self.latest_agent_error,
         }
 
@@ -371,11 +394,13 @@ class PersonFollowerNode(Node):
             cmd.angular.z = -abs(angular)
         self.manual_override_cmd = cmd
         self.manual_override_action = command
-        self.manual_override_until = time.time() + float(self.get_parameter("agent.action_duration_sec").value)
+        self.manual_override_started_at = time.time()
+        self.manual_override_until = self.manual_override_started_at + float(self.get_parameter("agent.action_duration_sec").value)
 
     def clear_manual_override(self) -> None:
         """停止并清除手动接管动作。"""
         self.manual_override_cmd = None
+        self.manual_override_started_at = 0.0
         self.manual_override_until = 0.0
         self.manual_override_action = "NONE"
 
@@ -566,7 +591,8 @@ class PersonFollowerNode(Node):
 
         if self.manual_override_cmd is not None:
             if time.time() <= self.manual_override_until:
-                safe_cmd, safety_reason = self.safety_guard.filter_cmd(self.manual_override_cmd, True, image_age)
+                command_age = max(0.0, now - self.manual_override_started_at)
+                safe_cmd, safety_reason = self.safety_guard.filter_cmd(self.manual_override_cmd, True, image_age, command_age)
                 self.latest_action = "MANUAL_%s" % self.manual_override_action
                 self._publish_cmd(
                     safe_cmd,
@@ -586,7 +612,8 @@ class PersonFollowerNode(Node):
             return
 
         if mode == ControlMode.GESTURE_CONTROL and override_cmd is not None:
-            safe_cmd, safety_reason = self.safety_guard.filter_cmd(override_cmd, True, image_age)
+            command_age = max(0.0, now - self.gesture_controller.action_started_at)
+            safe_cmd, safety_reason = self.safety_guard.filter_cmd(override_cmd, True, image_age, command_age)
             self._publish_cmd(safe_cmd, override_cmd, "gesture action %s" % action_name, safety_reason)
             return
 
@@ -600,7 +627,8 @@ class PersonFollowerNode(Node):
                 self.publish_stop("agent mode %s: %s" % (next_mode, agent_reason))
                 return
             elif agent_cmd is not None:
-                safe_cmd, safety_reason = self.safety_guard.filter_cmd(agent_cmd, True, image_age)
+                command_age = max(0.0, now - self.robot_executor.active_started_at)
+                safe_cmd, safety_reason = self.safety_guard.filter_cmd(agent_cmd, True, image_age, command_age)
                 self._publish_cmd(safe_cmd, agent_cmd, "agent action: %s" % agent_reason, safety_reason)
                 return
             else:
@@ -657,16 +685,27 @@ class PersonFollowerNode(Node):
             "stable_gesture": self.latest_gesture_state.get("stable_gesture", "none"),
             "cooldown_remaining": self.latest_gesture_state.get("cooldown_remaining", 0.0),
         }
+        camera_online = (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False
+        yolo_status = "online" if self.yolo is not None else "offline"
+        hand_status = "online" if self.gesture_enabled and self.gesture_detector is not None else "standby"
+        vlm_status = "online" if self.vision_agent.enabled and not self.latest_agent_error else "standby"
+        llm_status = "online" if self.agent_enabled and not self.latest_agent_error else "standby"
+        agent_status = "thinking" if self.agent_job_running else ("online" if self.agent_enabled else "standby")
         return {
-            "connected": (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False,
+            "connected": camera_online,
             "dashboard_version": DASHBOARD_VERSION,
             "battery": self.battery_percent,
             "gesture_name": gesture_info["current"],
             "target_name": "person" if target is not None else "none",
             "linear_x": round(float(self.latest_safe_cmd.linear.x), 3),
             "angular_z": round(float(self.latest_safe_cmd.angular.z), 3),
-            "llm_status": "online" if self.agent_enabled and not self.latest_agent_error else "standby",
-            "camera_status": "online" if (time.time() - self.last_image_time) < 2.0 else "offline",
+            "yolo_status": yolo_status,
+            "hand_status": hand_status,
+            "vlm_status": vlm_status,
+            "llm_status": llm_status,
+            "agent_status": agent_status,
+            "nav_status": "standby",
+            "camera_status": "online" if camera_online else "offline",
             "fps": round(self.fps, 2),
             "mode": self.gesture_controller.mode,
             "camera_topic": self.camera_topic,
@@ -681,6 +720,7 @@ class PersonFollowerNode(Node):
             "scene": self.latest_scene,
             "agent": {
                 "enabled": self.agent_enabled,
+                "status": agent_status,
                 "vision_description": self.latest_vision_description,
                 "last_plan": dict(self.robot_executor.last_plan),
                 "logs": list(self.robot_executor.logs),
@@ -689,6 +729,13 @@ class PersonFollowerNode(Node):
                 "job_running": self.agent_job_running,
                 "error": self.latest_agent_error,
                 "user_request": self.user_request,
+            },
+            "ai_compute": {
+                "latency_ms": round(self.robot_executor.last_latency_ms, 1),
+                "tokens": dict(self.robot_executor.last_tokens),
+                "job_running": self.agent_job_running,
+                "model": self.planner_agent.model,
+                "vlm_model": self.vision_agent.model,
             },
             "raw_cmd": twist_to_dict(self.latest_cmd),
             "safe_cmd": twist_to_dict(self.latest_safe_cmd),
