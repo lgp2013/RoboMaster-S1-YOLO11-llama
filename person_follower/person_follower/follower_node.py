@@ -14,9 +14,12 @@ import cv2
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
+from rclpy.action import ActionClient
 from rclpy.node import Node
+from robomaster_msgs.action import RecenterGimbal
+from robomaster_msgs.msg import GimbalCommand
 from sensor_msgs.msg import BatteryState, Image
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 from .follower_control import ControlConfig, PersonFollowerController
 from .gesture_controller import ControlMode, GestureController, GestureDebouncer
@@ -113,13 +116,15 @@ class PersonFollowerNode(Node):
         )
 
         self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
-        self.gimbal_pub = self.create_publisher(Twist, self.cmd_gimbal_topic, 10)
+        self.gimbal_pub = self.create_publisher(GimbalCommand, self.cmd_gimbal_topic, 10)
+        self.gimbal_engage_pub = self.create_publisher(Bool, "gimbal/engage", 10)
         self.robot_mode_pub = self.create_publisher(String, self.robot_mode_topic, 10)
         self.robot_command_pub = self.create_publisher(String, self.robot_command_topic, 10)
         self.led_command_pub = self.create_publisher(String, self.led_command_topic, 10)
         self.gesture_state_pub = self.create_publisher(String, "/gesture/state", 10)
         self.gesture_command_pub = self.create_publisher(String, "/gesture/command", 10)
         self.gesture_debug_pub = self.create_publisher(Image, "/gesture/debug_image", 5)
+        self.recenter_gimbal_client = ActionClient(self, RecenterGimbal, "recenter_gimbal")
 
         self.gesture_detector = None
         if self.gesture_enabled:
@@ -518,10 +523,16 @@ class PersonFollowerNode(Node):
             self.start_manual_override(command)
             self.publish_event("FOLLOW_AGENT", "%s manual chassis %s" % (source, command), event_type="command")
             return self._success(command, "Manual chassis command armed", mode=self.gesture_controller.mode)
-        if command in ("GIMBAL_UP", "GIMBAL_DOWN", "GIMBAL_LEFT", "GIMBAL_RIGHT", "GIMBAL_CENTER"):
+        if command in ("GIMBAL_UP", "GIMBAL_DOWN", "GIMBAL_LEFT", "GIMBAL_RIGHT"):
             self.start_manual_override(command)
             self.publish_event("GESTURE_AGENT", "%s manual gimbal %s" % (source, command), event_type="command")
             return self._success(command, "Manual gimbal command armed", mode=self.gesture_controller.mode)
+        if command == "GIMBAL_CENTER":
+            self.clear_manual_override()
+            self.publish_stop("%s gimbal center" % source)
+            self.recenter_gimbal(source)
+            self.publish_event("GESTURE_AGENT", "%s manual gimbal center" % source, event_type="command")
+            return self._success(command, "Gimbal recenter requested", mode=self.gesture_controller.mode)
 
         return self._failure(command, "Unsupported command")
 
@@ -669,8 +680,6 @@ class PersonFollowerNode(Node):
             gimbal.angular.z = gimbal_speed
         elif command == "GIMBAL_RIGHT":
             gimbal.angular.z = -gimbal_speed
-        elif command == "GIMBAL_CENTER":
-            gimbal = Twist()
 
         self.manual_override_cmd = chassis
         self.manual_override_gimbal_cmd = gimbal
@@ -987,13 +996,20 @@ class PersonFollowerNode(Node):
         safety_reason: str,
     ) -> None:
         self.cmd_pub.publish(safe_cmd)
-        self.gimbal_pub.publish(safe_gimbal_cmd)
+        self.publish_gimbal_speed(safe_gimbal_cmd)
         self.latest_cmd = raw_cmd
         self.latest_safe_cmd = safe_cmd
         self.latest_gimbal_cmd = raw_gimbal_cmd
         self.latest_safe_gimbal_cmd = safe_gimbal_cmd
         self.latest_reason = reason
         self.latest_safety_reason = safety_reason
+
+    def publish_gimbal_speed(self, cmd: Twist) -> None:
+        msg = GimbalCommand()
+        msg.pitch_speed = float(cmd.angular.y)
+        msg.yaw_speed = float(cmd.angular.z)
+        self.gimbal_engage_pub.publish(Bool(data=True))
+        self.gimbal_pub.publish(msg)
 
     def _clamp_gimbal_cmd(self, cmd: Twist) -> Twist:
         """把云台指令限制在安全角速度范围内。"""
@@ -1005,13 +1021,23 @@ class PersonFollowerNode(Node):
     def publish_stop(self, reason: str = "stop") -> None:
         stop = Twist()
         self.cmd_pub.publish(stop)
-        self.gimbal_pub.publish(stop)
+        self.publish_gimbal_speed(stop)
         self.latest_cmd = stop
         self.latest_safe_cmd = stop
         self.latest_gimbal_cmd = stop
         self.latest_safe_gimbal_cmd = stop
         self.latest_reason = reason
         self.latest_safety_reason = "stop"
+
+    def recenter_gimbal(self, source: str) -> None:
+        if not self.recenter_gimbal_client.wait_for_server(timeout_sec=0.2):
+            self.publish_event("GESTURE_AGENT", "%s recenter_gimbal action unavailable" % source, level="warning", event_type="command")
+            return
+        goal = RecenterGimbal.Goal()
+        goal.yaw_speed = float(self.max_angular_speed)
+        goal.pitch_speed = float(self.max_angular_speed)
+        self.gimbal_engage_pub.publish(Bool(data=True))
+        self.recenter_gimbal_client.send_goal_async(goal)
 
     def publish_sleep_zero(self, reason: str = "sleep") -> None:
         """SLEEP 模式持续输出底盘和云台零速度。"""
