@@ -10,7 +10,7 @@ import cv2
 from flask import Flask, Response, jsonify, render_template, request, send_file
 
 
-DASHBOARD_VERSION = "tactical-detail-modal-20260604-1735"
+DASHBOARD_VERSION = "tactical-detail-modal-20260604-1705"
 
 
 class DashboardServer:
