@@ -894,25 +894,25 @@ class PersonFollowerNode(Node):
         if mode == ControlMode.EMERGENCY_STOP:
             self.publish_stop("mode EMERGENCY_STOP")
             return
-        if frame is None:
-            self.publish_stop("no image")
-            return
-
         now = now_sec()
         image_age = now - last_image_time if last_image_time else 999.0
-        if image_age > float(self.get_parameter("image_timeout_sec").value):
-            self.publish_stop("image timeout")
-            return
 
         if self.manual_override_cmd is not None:
             if time.time() <= self.manual_override_until:
                 command_age = max(0.0, now - self.manual_override_started_at)
-                safe_cmd, safety_reason = self.safety_guard.filter_cmd(self.manual_override_cmd, True, image_age, command_age)
+                safe_cmd, safety_reason = self.safety_guard.filter_cmd(self.manual_override_cmd, True, 0.0, command_age)
                 gimbal_cmd = self._clamp_gimbal_cmd(self.manual_override_gimbal_cmd or Twist())
                 self.latest_action = "MANUAL_%s" % self.manual_override_action
                 self._publish_cmd(safe_cmd, self.manual_override_cmd, gimbal_cmd, self.manual_override_gimbal_cmd or Twist(), "manual override", safety_reason)
                 return
             self.clear_manual_override()
+
+        if frame is None:
+            self.publish_stop("no image")
+            return
+        if image_age > float(self.get_parameter("image_timeout_sec").value):
+            self.publish_stop("image timeout")
+            return
 
         override_cmd, action_name = self.gesture_controller.get_override_cmd()
         self.latest_action = action_name
