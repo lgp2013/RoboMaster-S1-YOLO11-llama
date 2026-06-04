@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RoboMaster 媒体管理</title>
+  <title>RoboMaster Media Manager</title>
   <meta name="dashboard-version" content="{{ dashboard_version }}">
   <link rel="stylesheet" href="/static/css/dashboard.css?v={{ dashboard_version }}">
 </head>
@@ -17,8 +17,7 @@
       <h1 data-i18n="mediaTitle">RoboMaster Media Manager</h1>
     </div>
     <div class="top-status">
-      <a class="settings-toggle top-link" href="/" rel="noopener" data-i18n="dashboard">控制台</a>
-      <button class="lang-toggle" id="langToggle" type="button">EN</button>
+      <a class="status-pill top-link" href="/" rel="noopener" data-i18n="dashboard">DASHBOARD</a>
       <div class="clock" id="mediaVersion">{{ dashboard_version }}</div>
     </div>
   </header>
@@ -26,19 +25,19 @@
   <main class="media-shell">
     <section class="cut-panel media-summary-panel">
       <div class="panel-header">
-        <span data-i18n="mediaOverview">媒体概览</span>
-        <button class="micro-button" id="mediaRefreshButton" type="button" data-i18n="refresh">刷新</button>
+        <span data-i18n="mediaOverview">MEDIA OVERVIEW</span>
+        <button class="micro-button" id="mediaRefreshButton" type="button" data-i18n="refresh">REFRESH</button>
       </div>
       <div class="media-summary-grid" id="mediaSummaryGrid"></div>
     </section>
 
     <section class="cut-panel media-section">
-      <div class="panel-header"><span data-i18n="snapshots">截图</span><strong id="snapshotCountLabel">0</strong></div>
+      <div class="panel-header"><span data-i18n="snapshots">SNAPSHOTS</span><strong id="snapshotCountLabel">0</strong></div>
       <div class="media-grid" id="snapshotGrid"></div>
     </section>
 
     <section class="cut-panel media-section">
-      <div class="panel-header"><span data-i18n="videos">录像</span><strong id="videoCountLabel">0</strong></div>
+      <div class="panel-header"><span data-i18n="videos">VIDEOS</span><strong id="videoCountLabel">0</strong></div>
       <div class="media-grid" id="videoGrid"></div>
     </section>
   </main>
@@ -79,6 +78,7 @@
       }
     };
 
+    // 从 localStorage 读取主页设置的语言
     let currentLang = localStorage.getItem("lang") || "zh";
 
     function t(key) {
@@ -92,15 +92,16 @@
           el.textContent = I18N[currentLang][key];
         }
       });
-      document.getElementById("langToggle").textContent = currentLang === "zh" ? "EN" : "中";
     }
 
-    function toggleLang() {
-      currentLang = currentLang === "zh" ? "en" : "zh";
-      localStorage.setItem("lang", currentLang);
-      applyI18n();
-      refreshMediaPage();
-    }
+    // 监听 localStorage 变化，实现语言同步
+    window.addEventListener("storage", (e) => {
+      if (e.key === "lang") {
+        currentLang = e.newValue || "zh";
+        applyI18n();
+        refreshMediaPage();
+      }
+    });
 
     async function fetchJson(url) {
       const response = await fetch(url, { cache: "no-store" });
@@ -163,7 +164,6 @@
     }
 
     document.getElementById("mediaRefreshButton")?.addEventListener("click", refreshMediaPage);
-    document.getElementById("langToggle")?.addEventListener("click", toggleLang);
 
     applyI18n();
     refreshMediaPage();
