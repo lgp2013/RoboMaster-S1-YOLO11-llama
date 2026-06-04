@@ -188,6 +188,25 @@ button.wake { background: linear-gradient(180deg, #2f6c3b, #102515); border-colo
 .settings-form label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 800; }
 input { width: 100%; min-width: 0; background: rgba(3, 9, 7, 0.88); border: 1px solid var(--line); color: var(--text); padding: 10px; font: inherit; }
 .settings-core { padding: 12px; background: rgba(5, 13, 10, 0.58); border: 1px solid rgba(120, 240, 228, 0.14); }
+.settings-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(120, 240, 228, 0.12);
+}
+.settings-version-row span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.settings-version-row strong {
+  color: var(--cyan);
+  font-size: 13px;
+  word-break: break-all;
+}
 .settings-core pre, #settingsMessage { white-space: pre-wrap; }
 .settings-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 0 14px 14px; }
 

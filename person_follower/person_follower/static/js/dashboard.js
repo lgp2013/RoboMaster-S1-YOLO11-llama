@@ -72,6 +72,7 @@ const I18N = {
     manualTurnSpeed: "\u624b\u52a8\u8f6c\u5411\u901f\u5ea6",
     manualDuration: "\u624b\u52a8\u52a8\u4f5c\u65f6\u957f",
     coreData: "\u6838\u5fc3\u6570\u636e",
+    versionLabel: "\u7248\u672c\u53f7",
     safetyZone: "\u5b89\u5168\u63a7\u5236\u533a",
     chassisZone: "\u5e95\u76d8\u63a7\u5236\u533a",
     gimbalZone: "\u4e91\u53f0\u63a7\u5236\u533a",
@@ -159,6 +160,7 @@ const I18N = {
     manualTurnSpeed: "Manual Turn Speed",
     manualDuration: "Manual Action Duration",
     coreData: "Core Data",
+    versionLabel: "Version",
     safetyZone: "Safety Control",
     chassisZone: "Chassis Control",
     gimbalZone: "Gimbal Control",
@@ -547,9 +549,13 @@ function fillSettings(settings = {}) {
 }
 
 async function loadSettings() {
-  const payload = await fetchJson("/api/settings");
+  const [payload, versionPayload] = await Promise.all([
+    fetchJson("/api/settings"),
+    fetchJson("/api/dashboard/version"),
+  ]);
   fillSettings(payload.settings || {});
   setText("settingsCoreData", JSON.stringify(payload.core || {}, null, 2));
+  setText("settingsVersion", versionPayload?.data?.version || document.querySelector('meta[name="dashboard-version"]')?.content || "--");
 }
 
 function readSettings() {
