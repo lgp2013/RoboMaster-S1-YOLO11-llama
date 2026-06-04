@@ -596,18 +596,6 @@ class PersonFollowerNode(Node):
             return self._failure("SETTINGS", "invalid speed setting: %s" % exc)
 
         self.publish_event("SYSTEM", "settings updated from dashboard", event_type="settings")
-        # 汇总每个子智能体的摘要输入/输出，供右侧卡片和详情弹窗共用。
-        now_text = time.strftime("%H:%M:%S")
-        latest_plan = dict(self.robot_executor.last_plan)
-        latest_plan_action = str(latest_plan.get("action", "STOP"))
-        gesture_state = dict(self.latest_gesture_state)
-        gesture_output = gesture_state.get("stable_gesture", "none")
-        # 汇总每个子智能体的摘要输入/输出，供右侧卡片和详情弹窗共用。
-        now_text = time.strftime("%H:%M:%S")
-        latest_plan = dict(self.robot_executor.last_plan)
-        latest_plan_action = str(latest_plan.get("action", "STOP"))
-        gesture_state = dict(self.latest_gesture_state)
-        gesture_output = gesture_state.get("stable_gesture", "none")
         return {
             "ok": True,
             "success": True,
@@ -1202,6 +1190,11 @@ class PersonFollowerNode(Node):
 
     def _agent_status_map(self) -> Dict[str, Dict[str, object]]:
         """汇总每个子智能体当前状态，供 Dashboard 渲染。"""
+        now_text = time.strftime("%H:%M:%S")
+        latest_plan = dict(self.robot_executor.last_plan)
+        latest_plan_action = str(latest_plan.get("action", "STOP"))
+        gesture_state = dict(self.latest_gesture_state)
+        gesture_output = str(gesture_state.get("stable_gesture", "none"))
         return {
             "FOLLOW_AGENT": {
                 "status": self.lock_state if self.follow_requested or self.lock_state not in ("NONE", "") else "READY",
