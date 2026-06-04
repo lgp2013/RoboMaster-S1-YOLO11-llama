@@ -688,13 +688,13 @@ class PersonFollowerNode(Node):
         elif command == "STRAFE_RIGHT":
             chassis.linear.y = -linear
         elif command == "GIMBAL_UP":
-            gimbal.angular.y = gimbal_speed
-        elif command == "GIMBAL_DOWN":
             gimbal.angular.y = -gimbal_speed
+        elif command == "GIMBAL_DOWN":
+            gimbal.angular.y = gimbal_speed
         elif command == "GIMBAL_LEFT":
-            gimbal.angular.z = gimbal_speed
-        elif command == "GIMBAL_RIGHT":
             gimbal.angular.z = -gimbal_speed
+        elif command == "GIMBAL_RIGHT":
+            gimbal.angular.z = gimbal_speed
 
         self.manual_override_cmd = chassis
         self.manual_override_gimbal_cmd = gimbal
