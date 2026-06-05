@@ -18,6 +18,7 @@ person_follower:
     # Person follow control configuration.
     control_rate_hz: 15.0
     center_threshold_px: 45
+    chassis_move_center_ratio: 0.20
     yaw_gain: 1.2
     distance_gain: 1.1
     max_linear_speed: 0.35
@@ -30,6 +31,7 @@ person_follower:
     target_distance_m: 1.0
     target_bbox_height_ratio: 0.60
     bbox_height_tolerance: 0.04
+    enable_chassis_yaw_assist: false
 
     # Safety.
     lost_target_timeout_sec: 3.0
@@ -48,6 +50,34 @@ person_follower:
     min_gimbal_speed: 0.05         # Minimum gimbal speed to overcome friction
     gimbal_deadzone_px: 8          # Small deadzone for responsive tracking
     gimbal_vertical_deadzone_px: 6 # Separate vertical deadzone for faster pitch tracking
+
+    # Locked-target follow control tuning.
+    follow_control:
+      enabled: true
+      require_locked_target: true
+      yolo_class_person: 0
+      iou_match_threshold: 0.25
+      center_distance_threshold_ratio: 0.18
+      max_area_change_ratio: 2.5
+      target_lost_timeout: 1.0
+      center_dead_zone_ratio: 0.08
+      too_far_height_ratio: 0.32
+      too_close_height_ratio: 0.58
+      max_linear_x: 0.10
+      max_angular_z: 0.30
+      max_gimbal_yaw_speed: 0.25
+      kp_chassis_yaw: 0.25
+      kp_gimbal_yaw: 0.20
+      chassis_yaw_invert: false
+      gimbal_yaw_invert: false
+      smooth_alpha: 0.4
+      control_rate_hz: 10.0
+      gimbal_first: true
+      chassis_rotate_delay_seconds: 0.5
+      debug_follow_only: false
+      enable_gimbal_control: true
+      enable_chassis_rotation: true
+      enable_distance_control: true
 
     # MediaPipe Hands gesture recognition.
     gesture:

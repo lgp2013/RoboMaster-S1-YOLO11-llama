@@ -1,4 +1,4 @@
-"""ROS2 Foxy node for RoboMaster S1 multi-agent following and dashboard control."""
+"""Documentation."""
 
 from __future__ import annotations
 
@@ -36,9 +36,12 @@ from .yolo_detector import PersonDetection, YoloPersonDetector
 
 @dataclass
 class LockedTarget:
-    """记录当前锁定人物的几何信息。"""
+    """Documentation."""
 
     bbox: Tuple[float, float, float, float]
+    center_x: float
+    center_y: float
+    area: float
     selected_by: str
     locked_at: float
     label: str
@@ -46,14 +49,14 @@ class LockedTarget:
 
 
 class InternalEventBus:
-    """轻量内部事件总线，用于子智能体之间共享事件与日志。"""
+    """Documentation."""
 
     def __init__(self, maxlen: int = 80) -> None:
         self._events: Deque[Dict[str, object]] = deque(maxlen=maxlen)
         self._lock = threading.Lock()
 
     def publish(self, source: str, message: str, level: str = "info", event_type: str = "status") -> Dict[str, object]:
-        """发布一条内部事件，同时返回事件对象供调用方复用。"""
+        """Documentation."""
         event = {
             "time": time.strftime("%H:%M:%S"),
             "timestamp": round(time.time(), 3),
@@ -67,13 +70,13 @@ class InternalEventBus:
         return event
 
     def snapshot(self, limit: int = 20) -> List[Dict[str, object]]:
-        """读取最近事件，供 Dashboard 轮询。"""
+        """Documentation."""
         with self._lock:
             return list(list(self._events)[:limit])
 
 
 class PersonFollowerNode(Node):
-    """多子智能体控制节点：跟随、手势、VLM、LLM 和安全过滤共用一个 ROS2 主线程。"""
+    """Documentation."""
 
     def __init__(self) -> None:
         super().__init__("person_follower")
@@ -89,9 +92,17 @@ class PersonFollowerNode(Node):
         self.robot_command_topic = str(self.get_parameter("robot_command_topic").value)
         self.led_command_topic = str(self.get_parameter("led_command_topic").value)
         self.robot_ip = str(self.get_parameter("robot_ip").value)
-        self.control_rate_hz = float(self.get_parameter("control_rate_hz").value)
-        self.lost_target_timeout_sec = float(self.get_parameter("lost_target_timeout_sec").value)
-        self.target_distance_m = float(self.get_parameter("target_distance_m").value)
+        self.control_rate_hz = float(self.get_parameter("follow_control.control_rate_hz").value)
+        self.lost_target_timeout_sec = float(self.get_parameter("follow_control.target_lost_timeout").value)
+        self.follow_enabled = bool(self.get_parameter("follow_control.enabled").value)
+        self.require_locked_target = bool(self.get_parameter("follow_control.require_locked_target").value)
+        self.follow_person_class_id = int(self.get_parameter("follow_control.yolo_class_person").value)
+        self.follow_iou_match_threshold = float(self.get_parameter("follow_control.iou_match_threshold").value)
+        self.follow_center_distance_threshold_ratio = float(
+            self.get_parameter("follow_control.center_distance_threshold_ratio").value
+        )
+        self.follow_max_area_change_ratio = float(self.get_parameter("follow_control.max_area_change_ratio").value)
+        self.target_distance_m = 1.0
         self.gesture_enabled = bool(self.get_parameter("gesture.enabled").value)
         self.publish_debug_image = bool(self.get_parameter("gesture.publish_debug_image").value)
         self.agent_enabled = bool(self.get_parameter("agent.enabled").value)
@@ -215,6 +226,27 @@ class PersonFollowerNode(Node):
         self.target_reset_count = 0
         self.locked_target_id = ""
         self.candidate_count = 0
+        self.last_people_time = 0.0
+        self.lock_match_stable_count = 0
+        self.follow_error_started_at = 0.0
+        self.last_follow_cmd = Twist()
+        self.last_follow_gimbal_cmd = Twist()
+        self.follow_debug: Dict[str, object] = {
+            "follow_state": "NONE",
+            "locked_target_id": "",
+            "locked_bbox": None,
+            "matched_bbox": None,
+            "iou": 0.0,
+            "center_distance": 0.0,
+            "error_x": 0.0,
+            "error_x_normalized": 0.0,
+            "target_height_ratio": 0.0,
+            "linear_x": 0.0,
+            "angular_z": 0.0,
+            "gimbal_yaw_speed": 0.0,
+            "gimbal_yaw_invert": bool(self.get_parameter("follow_control.gimbal_yaw_invert").value),
+            "chassis_yaw_invert": bool(self.get_parameter("follow_control.chassis_yaw_invert").value),
+        }
 
         self.user_request = ""
         self.agent_job_running = False
@@ -275,6 +307,7 @@ class PersonFollowerNode(Node):
             "person_class_id": 0,
             "control_rate_hz": 15.0,
             "center_threshold_px": 45,
+            "chassis_move_center_ratio": 0.20,
             "yaw_gain": 1.2,
             "distance_gain": 1.1,
             "max_linear_speed": 0.35,
@@ -284,6 +317,7 @@ class PersonFollowerNode(Node):
             "target_distance_m": 1.0,
             "target_bbox_height_ratio": 0.60,
             "bbox_height_tolerance": 0.04,
+            "enable_chassis_yaw_assist": False,
             "lost_target_timeout_sec": 3.0,
             "command_timeout_sec": 5.0,
             "image_timeout_sec": 5.0,
@@ -336,30 +370,58 @@ class PersonFollowerNode(Node):
             "min_gimbal_speed": 0.05,
             "gimbal_deadzone_px": 8,
             "gimbal_vertical_deadzone_px": 6,
+            "follow_control.enabled": True,
+            "follow_control.require_locked_target": True,
+            "follow_control.yolo_class_person": 0,
+            "follow_control.iou_match_threshold": 0.25,
+            "follow_control.center_distance_threshold_ratio": 0.18,
+            "follow_control.max_area_change_ratio": 2.5,
+            "follow_control.target_lost_timeout": 1.0,
+            "follow_control.center_dead_zone_ratio": 0.08,
+            "follow_control.too_far_height_ratio": 0.32,
+            "follow_control.too_close_height_ratio": 0.58,
+            "follow_control.max_linear_x": 0.10,
+            "follow_control.max_angular_z": 0.30,
+            "follow_control.max_gimbal_yaw_speed": 0.25,
+            "follow_control.kp_chassis_yaw": 0.25,
+            "follow_control.kp_gimbal_yaw": 0.20,
+            "follow_control.chassis_yaw_invert": False,
+            "follow_control.gimbal_yaw_invert": True,
+            "follow_control.smooth_alpha": 0.4,
+            "follow_control.control_rate_hz": 10.0,
+            "follow_control.gimbal_first": True,
+            "follow_control.chassis_rotate_delay_seconds": 0.5,
+            "follow_control.debug_follow_only": False,
+            "follow_control.enable_gimbal_control": True,
+            "follow_control.enable_chassis_rotation": True,
+            "follow_control.enable_distance_control": True,
         }
         for name, value in defaults.items():
             self.declare_parameter(name, value)
 
     def _control_config(self) -> ControlConfig:
         return ControlConfig(
-            center_threshold_px=int(self.get_parameter("center_threshold_px").value),
-            yaw_gain=float(self.get_parameter("yaw_gain").value),
-            distance_gain=float(self.get_parameter("distance_gain").value),
-            max_linear_speed=float(self.get_parameter("max_linear_speed").value),
-            min_linear_speed=float(self.get_parameter("min_linear_speed").value),
-            max_angular_speed=float(self.get_parameter("max_angular_speed").value),
-            min_angular_speed=float(self.get_parameter("min_angular_speed").value),
-            target_bbox_height_ratio=float(self.get_parameter("target_bbox_height_ratio").value),
-            bbox_height_tolerance=float(self.get_parameter("bbox_height_tolerance").value),
-            target_distance_m=float(self.get_parameter("target_distance_m").value),
-            enable_backward=bool(self.get_parameter("enable_backward").value),
-            enable_auto_move=bool(self.get_parameter("enable_auto_move").value),
-            # Gimbal control parameters
+            center_dead_zone_ratio=float(self.get_parameter("follow_control.center_dead_zone_ratio").value),
+            too_far_height_ratio=float(self.get_parameter("follow_control.too_far_height_ratio").value),
+            too_close_height_ratio=float(self.get_parameter("follow_control.too_close_height_ratio").value),
+            max_linear_x=float(self.get_parameter("follow_control.max_linear_x").value),
+            max_angular_z=float(self.get_parameter("follow_control.max_angular_z").value),
+            max_gimbal_yaw_speed=float(self.get_parameter("follow_control.max_gimbal_yaw_speed").value),
+            kp_chassis_yaw=float(self.get_parameter("follow_control.kp_chassis_yaw").value),
+            kp_gimbal_yaw=float(self.get_parameter("follow_control.kp_gimbal_yaw").value),
+            chassis_yaw_invert=bool(self.get_parameter("follow_control.chassis_yaw_invert").value),
+            gimbal_yaw_invert=bool(self.get_parameter("follow_control.gimbal_yaw_invert").value),
+            smooth_alpha=float(self.get_parameter("follow_control.smooth_alpha").value),
+            gimbal_first=bool(self.get_parameter("follow_control.gimbal_first").value),
+            chassis_rotate_delay_seconds=float(self.get_parameter("follow_control.chassis_rotate_delay_seconds").value),
+            debug_follow_only=bool(self.get_parameter("follow_control.debug_follow_only").value),
+            enable_gimbal_control=bool(self.get_parameter("follow_control.enable_gimbal_control").value),
+            enable_chassis_rotation=bool(self.get_parameter("follow_control.enable_chassis_rotation").value),
+            enable_distance_control=bool(self.get_parameter("follow_control.enable_distance_control").value),
             gimbal_target_y_ratio=float(self.get_parameter("gimbal_target_y_ratio").value),
             gimbal_frame_center_y_ratio=float(self.get_parameter("gimbal_frame_center_y_ratio").value),
             gimbal_yaw_gain=float(self.get_parameter("gimbal_yaw_gain").value),
             gimbal_pitch_gain=float(self.get_parameter("gimbal_pitch_gain").value),
-            max_gimbal_yaw_speed=float(self.get_parameter("max_gimbal_yaw_speed").value),
             max_gimbal_pitch_speed=float(self.get_parameter("max_gimbal_pitch_speed").value),
             min_gimbal_speed=float(self.get_parameter("min_gimbal_speed").value),
             gimbal_deadzone_px=int(self.get_parameter("gimbal_deadzone_px").value),
@@ -371,7 +433,7 @@ class PersonFollowerNode(Node):
         return {name: str(self.get_parameter("gesture_actions.%s" % name).value) for name in names}
 
     def publish_event(self, source: str, message: str, level: str = "info", event_type: str = "status") -> None:
-        """发布内部事件，并同步到 ROS 日志。"""
+        """Documentation."""
         event = self.event_bus.publish(source, message, level=level, event_type=event_type)
         if level == "error":
             self.get_logger().error("[%s] %s" % (source, message))
@@ -382,7 +444,7 @@ class PersonFollowerNode(Node):
         return event
 
     def robot_command_callback(self, msg: String) -> None:
-        """监听 /robot/command，允许外部节点复用同一套控制命令。"""
+        """Documentation."""
         command = self._parse_robot_command(msg.data)
         if command:
             self.apply_robot_command(command, source="TOPIC")
@@ -402,18 +464,18 @@ class PersonFollowerNode(Node):
         return raw.upper()
 
     def publish_robot_mode(self) -> None:
-        """周期发布当前模式，供其他 ROS2 节点订阅。"""
+        """Documentation."""
         self.robot_mode_pub.publish(String(data=str(self.gesture_controller.mode)))
 
     def publish_robot_command(self, command: str, payload: Optional[Dict[str, object]] = None) -> None:
-        """同步发布 Dashboard 指令，便于 ROS2 外部组件感知控制操作。"""
+        """Documentation."""
         data = {"command": str(command).upper(), "source": "dashboard", "timestamp": time.time()}
         if payload:
             data["payload"] = payload
         self.robot_command_pub.publish(String(data=json.dumps(data, ensure_ascii=False)))
 
     def publish_led_command(self, command: str) -> None:
-        """给外部 LED 桥接层一个显式的软件休眠状态信号。"""
+        """Documentation."""
         self.led_command_pub.publish(String(data=str(command).upper()))
 
     def _success(self, command: str, message: str, **extra) -> Dict[str, object]:
@@ -427,7 +489,7 @@ class PersonFollowerNode(Node):
         return result
 
     def _mark_command(self, command: str, source: str) -> None:
-        """记录最近一次控制来源，供遥测摘要和详情弹窗显示。"""
+        """Documentation."""
         self.current_command = command
         self.current_control_source = source
         self.last_command_time = time.time()
@@ -438,7 +500,7 @@ class PersonFollowerNode(Node):
         source: str = "DASHBOARD",
         payload: Optional[Dict[str, object]] = None,
     ) -> Dict[str, object]:
-        """统一处理 Dashboard、ROS Topic 和内部 Agent 指令。"""
+        """Documentation."""
         payload = payload or {}
         command = str(command).upper()
         self._mark_command(command, source)
@@ -485,7 +547,7 @@ class PersonFollowerNode(Node):
             self.publish_robot_mode()
             return self._success(command, "Follow paused", mode=self.gesture_controller.mode)
         if command == "START_FOLLOW":
-            if self.locked_target is None:
+            if self.require_locked_target and (self.locked_target is None or self.lock_state != "LOCKED"):
                 self.lock_state = "SCANNING"
                 self.lock_message = "No locked person; switched to scanning only"
                 self.publish_event("FOLLOW_AGENT", "follow paused due to no locked target", level="warning", event_type="lock")
@@ -520,7 +582,15 @@ class PersonFollowerNode(Node):
             y = payload.get("y")
             if x is None or y is None:
                 return self.lock_best_person(source)
-            return self.lock_target_from_point(float(x), float(y), source=source)
+            raw_width = payload.get("raw_width")
+            raw_height = payload.get("raw_height")
+            return self.lock_target_from_point(
+                float(x),
+                float(y),
+                source=source,
+                raw_width=float(raw_width) if raw_width is not None else None,
+                raw_height=float(raw_height) if raw_height is not None else None,
+            )
         if command == "RESET_TARGET":
             self.unlock_target("%s reset target" % source)
             return self._success(command, "Target reset", lock_state=self.lock_state)
@@ -565,7 +635,7 @@ class PersonFollowerNode(Node):
         return self._failure(command, "Unsupported command")
 
     def enter_sleep(self, source: str) -> None:
-        """进入软件休眠，强制底盘和云台持续零速度。"""
+        """Documentation."""
         self.follow_requested = False
         self.clear_manual_override()
         self.robot_executor.update_plan({"action": "STOP", "reason": "sleep mode", "speak": ""})
@@ -576,7 +646,7 @@ class PersonFollowerNode(Node):
         self.publish_robot_mode()
 
     def wake_robot(self, source: str) -> Dict[str, object]:
-        """从软件休眠恢复；若仍处于急停则拒绝恢复。"""
+        """Documentation."""
         if self.gesture_controller.mode == ControlMode.EMERGENCY_STOP:
             self.publish_stop("WAKE blocked by EMERGENCY_STOP")
             self.publish_event("SAFETY_AGENT", "%s wake blocked by emergency stop" % source, level="warning", event_type="command")
@@ -589,7 +659,7 @@ class PersonFollowerNode(Node):
         return self._success("WAKE", "Robot woke from software sleep", mode=self.gesture_controller.mode)
 
     def handle_dashboard_command(self, command: str, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
-        """处理 Dashboard 按钮和视频点击选人。"""
+        """Documentation."""
         payload = payload or {}
         self.publish_robot_command(command, payload)
         result = self.apply_robot_command(command, source="DASHBOARD", payload=payload)
@@ -606,7 +676,7 @@ class PersonFollowerNode(Node):
         return result
 
     def handle_dashboard_settings(self, payload: Optional[Dict[str, object]] = None) -> Dict[str, object]:
-        """读取或更新 Dashboard 运行时设置。"""
+        """Documentation."""
         if payload is None:
             return {"ok": True, "success": True, "settings": self.current_settings(), "core": self.core_data()}
 
@@ -652,7 +722,7 @@ class PersonFollowerNode(Node):
         }
 
     def current_settings(self) -> Dict[str, object]:
-        """返回可在设置弹窗中编辑的运行时配置。"""
+        """Documentation."""
         return {
             "robot_ip": self.robot_ip,
             "llm_enabled": self.planner_agent.enabled,
@@ -668,7 +738,7 @@ class PersonFollowerNode(Node):
         }
 
     def core_data(self) -> Dict[str, object]:
-        """设置弹窗展示的核心运行数据。"""
+        """Documentation."""
         camera_online = (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False
         return {
             "dashboard_version": DASHBOARD_VERSION,
@@ -689,7 +759,7 @@ class PersonFollowerNode(Node):
         }
 
     def start_manual_override(self, command: str) -> None:
-        """启动短时手动接管。底盘和云台走同一套时间窗，便于统一安全收口。"""
+        """Documentation."""
         chassis = Twist()
         gimbal = Twist()
         linear = abs(float(self.robot_executor.forward_speed))
@@ -724,7 +794,7 @@ class PersonFollowerNode(Node):
         self.manual_override_until = self.manual_override_started_at + float(self.robot_executor.action_duration_sec)
 
     def clear_manual_override(self) -> None:
-        """停止并清理手动接管状态。"""
+        """Documentation."""
         self.manual_override_cmd = None
         self.manual_override_gimbal_cmd = None
         self.manual_override_started_at = 0.0
@@ -732,7 +802,7 @@ class PersonFollowerNode(Node):
         self.manual_override_action = "NONE"
 
     def battery_callback(self, msg: BatteryState) -> None:
-        """读取 /battery。robomaster_ros 通常发布 BatteryState。"""
+        """Documentation."""
         try:
             if msg.percentage >= 0.0:
                 self.battery_percent = int(round(float(msg.percentage) * 100.0))
@@ -750,14 +820,14 @@ class PersonFollowerNode(Node):
         try:
             people = self.detector.detect(frame)
             self.candidate_count = len(people)
-            tracked_target = self._resolve_locked_target(people)
+            tracked_target = self.match_locked_target_frame(people)
             highlighted = tracked_target if tracked_target is not None else self.detector.select_largest_person(people)
             if self.locked_target is None:
                 if people:
                     self.lock_state = "CANDIDATE"
                     self.lock_message = "Detected candidate person; waiting for lock"
                 else:
-                    self.lock_state = "NONE"
+                    self.lock_state = "SCANNING"
                     self.lock_message = "No person detected"
             annotated = frame.copy()
             self.detector.draw_detections(annotated, people, highlighted)
@@ -793,6 +863,8 @@ class PersonFollowerNode(Node):
                 self.latest_best_gesture = best
                 self.latest_gesture_state = gesture_state
                 self.last_image_time = now
+                if people:
+                    self.last_people_time = now
                 if tracked_target is not None:
                     self.last_target_time = now
 
@@ -816,7 +888,7 @@ class PersonFollowerNode(Node):
         gesture_state: Dict[str, object],
         tracked_target: Optional[PersonDetection],
     ) -> None:
-        """在 OpenCV 帧上叠加模式、锁定状态和当前动作。"""
+        """Documentation."""
         lines = [
             "mode: %s" % self.gesture_controller.mode,
             "follow lock: %s" % self.lock_state,
@@ -857,7 +929,7 @@ class PersonFollowerNode(Node):
         gestures: List[GestureResult],
         target: Optional[PersonDetection],
     ) -> None:
-        """按固定间隔启动后台 Agent 推理，避免阻塞图像主回调。"""
+        """Documentation."""
         if not self.agent_enabled:
             return
         if self.gesture_controller.mode == ControlMode.SLEEP:
@@ -887,7 +959,7 @@ class PersonFollowerNode(Node):
         gestures: List[GestureResult],
         target: Optional[PersonDetection],
     ) -> None:
-        """后台调用 VLM 和 LLM，生成高级动作建议。"""
+        """Documentation."""
         try:
             if self.gesture_controller.mode == ControlMode.SLEEP:
                 return
@@ -1004,26 +1076,78 @@ class PersonFollowerNode(Node):
             self.publish_stop("no locked target")
             return
 
+        if image_age > 1.0:
+            self._set_follow_lost("image timeout, stop following")
+            self.publish_stop("image timeout")
+            return
+
         has_fresh_target = target is not None and (now - last_target_time) <= self.lost_target_timeout_sec
         if not has_fresh_target:
+            self._set_follow_lost("target lost, stop following")
             self.publish_stop("target lost")
             if time.time() - self.last_lock_loss_time > 1.0:
                 self.last_lock_loss_time = time.time()
-                self.lock_state = "LOST"
-                self.lock_message = "Locked target lost; robot stopped"
-                self.publish_event("FOLLOW_AGENT", "locked target lost; stop", level="warning", event_type="lock")
+                self.publish_event("FOLLOW_AGENT", "target lost, stop following", level="warning", event_type="lock")
+            return
+
+        if self.lock_match_stable_count < 2:
+            self.lock_state = "LOCKED"
+            self.lock_message = "Locked target stabilizing"
+            self.follow_debug.update({"follow_state": self.lock_state})
+            self.publish_stop("waiting stable target")
             return
 
         height, width = frame.shape[:2]
-        cmd, reason, bbox_height_ratio = self.controller.compute_cmd(target, width, height)
-        safe_cmd, safety_reason = self.safety_guard.filter_cmd(cmd, True, image_age)
-        # 计算云台控制命令（自动调整俯仰和偏航）
-        gimbal_cmd, gimbal_reason = self.controller.compute_gimbal_cmd(target, width, height)
-        safe_gimbal_cmd = self._clamp_gimbal_cmd(gimbal_cmd)
-        self.latest_bbox_height_ratio = bbox_height_ratio
-        self.lock_state = "LOCKED"
+        metrics = self.controller.compute_metrics(target, width, height)
+        self.latest_bbox_height_ratio = metrics["target_height_ratio"]
+        self.follow_debug.update(
+            {
+                "follow_state": "FOLLOW_ACTIVE",
+                "locked_target_id": self.locked_target_id,
+                "locked_bbox": [round(v, 1) for v in self.locked_target.bbox] if self.locked_target else None,
+                "error_x": round(metrics["error_x"], 2),
+                "error_x_normalized": round(metrics["error_x_normalized"], 3),
+                "target_height_ratio": round(metrics["target_height_ratio"], 3),
+            }
+        )
+
+        gimbal_raw, _ = self.controller.compute_gimbal_cmd(target, width, height)
+        gimbal_yaw_speed = float(gimbal_raw.angular.z)
+        gimbal_near_limit = abs(gimbal_yaw_speed) >= (self.controller.config.max_gimbal_yaw_speed * 0.92)
+        if abs(metrics["error_x"]) >= metrics["dead_zone_x"]:
+            if self.follow_error_started_at <= 0.0:
+                self.follow_error_started_at = now
+        else:
+            self.follow_error_started_at = 0.0
+
+        allow_chassis_rotation = bool(self.controller.config.enable_chassis_rotation)
+        if allow_chassis_rotation and self.controller.config.gimbal_first:
+            elapsed = max(0.0, now - self.follow_error_started_at) if self.follow_error_started_at > 0.0 else 0.0
+            allow_chassis_rotation = elapsed >= self.controller.config.chassis_rotate_delay_seconds or gimbal_near_limit
+
+        cmd_raw, cmd_metrics = self.controller.compute_cmd(target, width, height, allow_chassis_rotation)
+        safe_cmd, safety_reason = self.safety_guard.filter_cmd(cmd_raw, True, image_age)
+        safe_cmd = self._smooth_follow_cmd(safe_cmd)
+        safe_gimbal_cmd = self._smooth_follow_gimbal_cmd(gimbal_raw)
+        safe_gimbal_cmd = self._clamp_gimbal_cmd(safe_gimbal_cmd)
+        self.follow_debug.update(
+            {
+                "matched_bbox": [round(v, 1) for v in self.locked_target.bbox] if self.locked_target else None,
+                "linear_x": round(float(safe_cmd.linear.x), 3),
+                "angular_z": round(float(safe_cmd.angular.z), 3),
+                "gimbal_yaw_speed": round(float(safe_gimbal_cmd.angular.z), 3),
+                "gimbal_yaw_invert": bool(self.controller.config.gimbal_yaw_invert),
+                "chassis_yaw_invert": bool(self.controller.config.chassis_yaw_invert),
+            }
+        )
+        self.lock_state = "FOLLOW_ACTIVE"
         self.lock_message = "Locked target tracked"
-        self._publish_cmd(safe_cmd, cmd, safe_gimbal_cmd, gimbal_cmd, f"{reason} | {gimbal_reason}", safety_reason)
+        reason = "follow: height=%s yaw=%s gimbal=%s" % (
+            round(float(cmd_metrics["target_height_ratio"]), 3),
+            round(float(cmd_raw.angular.z), 3),
+            round(float(gimbal_raw.angular.z), 3),
+        )
+        self._publish_cmd(safe_cmd, cmd_raw, safe_gimbal_cmd, gimbal_raw, reason, safety_reason)
 
     def _publish_cmd(
         self,
@@ -1043,6 +1167,36 @@ class PersonFollowerNode(Node):
         self.latest_reason = reason
         self.latest_safety_reason = safety_reason
 
+    def _smooth_follow_cmd(self, cmd: Twist) -> Twist:
+        """Documentation."""
+        alpha = max(0.0, min(1.0, float(self.controller.config.smooth_alpha)))
+        if self.last_follow_cmd is None:
+            self.last_follow_cmd = Twist()
+        smooth = Twist()
+        smooth.linear.x = alpha * float(cmd.linear.x) + (1.0 - alpha) * float(self.last_follow_cmd.linear.x)
+        smooth.linear.y = 0.0
+        smooth.linear.z = 0.0
+        smooth.angular.x = 0.0
+        smooth.angular.y = 0.0
+        smooth.angular.z = alpha * float(cmd.angular.z) + (1.0 - alpha) * float(self.last_follow_cmd.angular.z)
+        self.last_follow_cmd = smooth
+        return smooth
+
+    def _smooth_follow_gimbal_cmd(self, cmd: Twist) -> Twist:
+        """Documentation."""
+        alpha = max(0.0, min(1.0, float(self.controller.config.smooth_alpha)))
+        if self.last_follow_gimbal_cmd is None:
+            self.last_follow_gimbal_cmd = Twist()
+        smooth = Twist()
+        smooth.linear.x = 0.0
+        smooth.linear.y = 0.0
+        smooth.linear.z = 0.0
+        smooth.angular.x = 0.0
+        smooth.angular.y = alpha * float(cmd.angular.y) + (1.0 - alpha) * float(self.last_follow_gimbal_cmd.angular.y)
+        smooth.angular.z = alpha * float(cmd.angular.z) + (1.0 - alpha) * float(self.last_follow_gimbal_cmd.angular.z)
+        self.last_follow_gimbal_cmd = smooth
+        return smooth
+
     def publish_gimbal_speed(self, cmd: Twist) -> None:
         msg = GimbalCommand()
         msg.pitch_speed = float(cmd.angular.y)
@@ -1051,7 +1205,7 @@ class PersonFollowerNode(Node):
         self.gimbal_pub.publish(msg)
 
     def _clamp_gimbal_cmd(self, cmd: Twist) -> Twist:
-        """把云台指令限制在安全角速度范围内。"""
+        """Documentation."""
         safe = Twist()
         safe.angular.y = clamp(float(cmd.angular.y), -self.max_angular_speed, self.max_angular_speed)
         safe.angular.z = clamp(float(cmd.angular.z), -self.max_angular_speed, self.max_angular_speed)
@@ -1067,6 +1221,8 @@ class PersonFollowerNode(Node):
         self.latest_safe_gimbal_cmd = stop
         self.latest_reason = reason
         self.latest_safety_reason = "stop"
+        self.last_follow_cmd = Twist()
+        self.last_follow_gimbal_cmd = Twist()
 
     def recenter_gimbal(self, source: str) -> None:
         if not self.recenter_gimbal_client.wait_for_server(timeout_sec=0.2):
@@ -1079,12 +1235,12 @@ class PersonFollowerNode(Node):
         self.recenter_gimbal_client.send_goal_async(goal)
 
     def publish_sleep_zero(self, reason: str = "sleep") -> None:
-        """SLEEP 模式持续输出底盘和云台零速度。"""
+        """Documentation."""
         self.publish_stop(reason)
         self.latest_safety_reason = "sleep zero"
 
     def lock_best_person(self, source: str) -> Dict[str, object]:
-        """锁定当前帧里最显著的人物目标。"""
+        """Documentation."""
         with self.lock:
             people = list(self.latest_people)
         target = self.detector.select_largest_person(people)
@@ -1096,8 +1252,15 @@ class PersonFollowerNode(Node):
         self.publish_event("FOLLOW_AGENT", "%s locked best person" % source, event_type="lock")
         return self._success("LOCK_TARGET", "Best detected person locked", lock_state=self.lock_state)
 
-    def lock_target_from_point(self, x: float, y: float, source: str = "DASHBOARD") -> Dict[str, object]:
-        """根据视频点击位置锁定人物。x/y 使用 0..1 归一化坐标。"""
+    def lock_target_from_point(
+        self,
+        x: float,
+        y: float,
+        source: str = "DASHBOARD",
+        raw_width: Optional[float] = None,
+        raw_height: Optional[float] = None,
+    ) -> Dict[str, object]:
+        """Documentation."""
         with self.lock:
             people = list(self.latest_people)
         if not people:
@@ -1105,32 +1268,39 @@ class PersonFollowerNode(Node):
 
         width = max(1.0, float(self.latest_frame.shape[1])) if self.latest_frame is not None else 1.0
         height = max(1.0, float(self.latest_frame.shape[0])) if self.latest_frame is not None else 1.0
-        px = clamp(float(x), 0.0, 1.0) * width
-        py = clamp(float(y), 0.0, 1.0) * height
+        source_width = max(1.0, float(raw_width if raw_width is not None else width))
+        source_height = max(1.0, float(raw_height if raw_height is not None else height))
+        px = clamp(float(x), 0.0, source_width - 1.0) * (width / source_width)
+        py = clamp(float(y), 0.0, source_height - 1.0) * (height / source_height)
 
         containing = [person for person in people if person.x1 <= px <= person.x2 and person.y1 <= py <= person.y2]
-        if containing:
-            target = max(containing, key=lambda item: item.area)
-        else:
-            target = min(people, key=lambda item: ((item.center_x - px) ** 2 + (item.center_y - py) ** 2))
+        if not containing:
+            self.publish_event("FOLLOW_AGENT", "%s click missed all person boxes" % source, level="warning", event_type="lock")
+            return self._failure("LOCK_TARGET", "Click point is outside every person bbox")
+        target = min(containing, key=lambda item: ((item.center_x - px) ** 2 + (item.center_y - py) ** 2))
 
         self._store_locked_target(target, selected_by=source)
         self.publish_event("FOLLOW_AGENT", "%s clicked and locked target" % source, event_type="lock")
         return self._success("LOCK_TARGET", "Target locked from video click", lock_state=self.lock_state)
 
     def unlock_target(self, reason: str) -> None:
-        """清空锁定目标，但保留最后一次失锁说明。"""
+        """Documentation."""
         self.locked_target = None
         self.locked_target_id = ""
         self.follow_requested = False
         self.lock_state = "NONE"
         self.lock_message = reason
         self.publish_event("FOLLOW_AGENT", reason, level="warning", event_type="lock")
+        self.last_follow_cmd = Twist()
+        self.last_follow_gimbal_cmd = Twist()
 
     def _store_locked_target(self, target: PersonDetection, selected_by: str) -> None:
-        """把当前检测结果固化为锁定目标。"""
+        """Documentation."""
         self.locked_target = LockedTarget(
             bbox=(target.x1, target.y1, target.x2, target.y2),
+            center_x=float(target.center_x),
+            center_y=float(target.center_y),
+            area=float(target.area),
             selected_by=selected_by,
             locked_at=time.time(),
             label="person",
@@ -1139,9 +1309,31 @@ class PersonFollowerNode(Node):
         self.locked_target_id = "person-%s" % int(self.locked_target.locked_at * 1000)
         self.lock_state = "LOCKED"
         self.lock_message = "Locked target ready for follow"
+        self.lock_match_stable_count = 0
+        self.follow_error_started_at = 0.0
+        self.last_follow_cmd = Twist()
+        self.last_follow_gimbal_cmd = Twist()
+        self.follow_debug.update(
+            {
+                "follow_state": self.lock_state,
+                "locked_target_id": self.locked_target_id,
+                "locked_bbox": [round(v, 1) for v in self.locked_target.bbox],
+                "matched_bbox": None,
+                "iou": 0.0,
+                "center_distance": 0.0,
+                "error_x": 0.0,
+                "error_x_normalized": 0.0,
+                "target_height_ratio": 0.0,
+                "linear_x": 0.0,
+                "angular_z": 0.0,
+                "error_y": 0.0,
+                "error_y_normalized": 0.0,
+                "gimbal_yaw_speed": 0.0,
+            }
+        )
 
     def _resolve_locked_target(self, people: List[PersonDetection]) -> Optional[PersonDetection]:
-        """根据上一帧锁定框，在本帧里继续匹配同一人物。"""
+        """Documentation."""
         if self.locked_target is None:
             self.lock_state = "NONE"
             self.lock_message = "No target locked"
@@ -1176,8 +1368,88 @@ class PersonFollowerNode(Node):
         self.lock_message = "Locked target tracked"
         return best
 
+    def match_locked_target_frame(self, people: List[PersonDetection]) -> Optional[PersonDetection]:
+        """Documentation."""
+        if self.locked_target is None:
+            self.lock_state = "NONE"
+            self.lock_message = "No target locked"
+            return None
+        if not people:
+            self.follow_debug.update({"iou": 0.0, "center_distance": 0.0, "matched_bbox": None})
+            self._set_follow_lost("Locked target missing in current frame")
+            return None
+
+        best_iou_target = None
+        best_iou = 0.0
+        for person in people:
+            score = self._iou(self.locked_target.bbox, (person.x1, person.y1, person.x2, person.y2))
+            if score > best_iou:
+                best_iou = score
+                best_iou_target = person
+
+        def area_ratio_ok(person: PersonDetection) -> bool:
+            area_ratio = max(person.area, self.locked_target.area) / max(1.0, min(person.area, self.locked_target.area))
+            return area_ratio <= self.follow_max_area_change_ratio
+
+        match = None
+        center_distance = 0.0
+        if best_iou_target is not None and best_iou >= self.follow_iou_match_threshold and area_ratio_ok(best_iou_target):
+            match = best_iou_target
+            center_distance = ((match.center_x - self.locked_target.center_x) ** 2 + (match.center_y - self.locked_target.center_y) ** 2) ** 0.5
+        else:
+            frame_width = max(1.0, float(self.latest_frame.shape[1])) if self.latest_frame is not None else 1.0
+            max_center_distance = frame_width * self.follow_center_distance_threshold_ratio
+            center_candidates = [
+                person
+                for person in people
+                if area_ratio_ok(person)
+                and (((person.center_x - self.locked_target.center_x) ** 2 + (person.center_y - self.locked_target.center_y) ** 2) ** 0.5) <= max_center_distance
+            ]
+            if center_candidates:
+                match = min(
+                    center_candidates,
+                    key=lambda item: ((item.center_x - self.locked_target.center_x) ** 2 + (item.center_y - self.locked_target.center_y) ** 2),
+                )
+                center_distance = ((match.center_x - self.locked_target.center_x) ** 2 + (match.center_y - self.locked_target.center_y) ** 2) ** 0.5
+
+        if match is None:
+            self.follow_debug.update({"iou": round(best_iou, 3), "center_distance": round(center_distance, 2), "matched_bbox": None})
+            self._set_follow_lost("target lost, stop following")
+            return None
+
+        self.locked_target.bbox = (match.x1, match.y1, match.x2, match.y2)
+        self.locked_target.center_x = float(match.center_x)
+        self.locked_target.center_y = float(match.center_y)
+        self.locked_target.area = float(match.area)
+        self.locked_target.confidence = float(match.confidence)
+        self.lock_match_stable_count += 1
+        self.lock_state = "LOCKED"
+        self.lock_message = "Locked target tracked"
+        self.follow_debug.update(
+            {
+                "follow_state": self.lock_state,
+                "locked_target_id": self.locked_target_id,
+                "locked_bbox": [round(v, 1) for v in self.locked_target.bbox],
+                "matched_bbox": [round(match.x1, 1), round(match.y1, 1), round(match.x2, 1), round(match.y2, 1)],
+                "iou": round(best_iou, 3),
+                "center_distance": round(center_distance, 2),
+            }
+        )
+        return match
+
+    def _set_follow_lost(self, reason: str) -> None:
+        """Documentation."""
+        self.follow_requested = False
+        self.lock_match_stable_count = 0
+        self.last_follow_cmd = Twist()
+        self.last_follow_gimbal_cmd = Twist()
+        self.follow_error_started_at = 0.0
+        self.lock_state = "LOST"
+        self.lock_message = reason
+        self.follow_debug.update({"follow_state": self.lock_state})
+
     def _iou(self, a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> float:
-        """计算两个检测框的 IoU，用于轻量目标重关联。"""
+        """Documentation."""
         ax1, ay1, ax2, ay2 = a
         bx1, by1, bx2, by2 = b
         inter_x1 = max(ax1, bx1)
@@ -1193,13 +1465,13 @@ class PersonFollowerNode(Node):
         return inter_area / denom
 
     def _write_recording_frame(self, frame) -> None:
-        """在录制开启时把最新画面写入视频文件。"""
+        """Documentation."""
         if not self.recording or self.video_writer is None:
             return
         self.video_writer.write(frame)
 
     def take_snapshot(self, source: str) -> Dict[str, object]:
-        """保存当前标注画面到 records/snapshots。"""
+        """Documentation."""
         with self.lock:
             frame = None if self.latest_annotated is None else self.latest_annotated.copy()
         if frame is None:
@@ -1212,7 +1484,7 @@ class PersonFollowerNode(Node):
         return self._success("SNAPSHOT", "Snapshot saved", path=str(path))
 
     def start_recording(self, source: str) -> Dict[str, object]:
-        """启动视频录制，保存到 records/videos。"""
+        """Documentation."""
         if self.recording:
             return self._success("START_RECORD", "Recording already running", path=self.video_output_path)
         with self.lock:
@@ -1239,7 +1511,7 @@ class PersonFollowerNode(Node):
         return self._success("START_RECORD", "Recording started", path=str(path))
 
     def stop_recording(self, source: str) -> Dict[str, object]:
-        """停止录制并释放 VideoWriter。"""
+        """Documentation."""
         if self.video_writer is not None:
             self.video_writer.release()
         self.video_writer = None
@@ -1298,7 +1570,7 @@ class PersonFollowerNode(Node):
         }
 
     def _agent_status_map(self) -> Dict[str, Dict[str, object]]:
-        """汇总每个子智能体当前状态，供 Dashboard 渲染。"""
+        """Documentation."""
         now_text = time.strftime("%H:%M:%S")
         latest_plan = dict(self.robot_executor.last_plan)
         latest_plan_action = str(latest_plan.get("action", "STOP"))
@@ -1440,8 +1712,10 @@ class PersonFollowerNode(Node):
         }
 
     def _status_dict(self) -> Dict[str, object]:
-        """输出给 Dashboard 的完整运行状态。"""
+        """Documentation."""
         target = self.latest_target
+        frame_width = int(self.latest_frame.shape[1]) if self.latest_frame is not None else 0
+        frame_height = int(self.latest_frame.shape[0]) if self.latest_frame is not None else 0
         target_info = None
         if target is not None:
             target_info = {
@@ -1465,7 +1739,7 @@ class PersonFollowerNode(Node):
         camera_online = (time.time() - self.last_image_time) < 2.0 if self.last_image_time else False
         sub_agents = self._agent_status_map()
         model_name = self.planner_agent.model or self.vision_agent.model or "unknown"
-        summary_scene = self.latest_vision_description or self.latest_scene.get("description", "暂无场景报告")
+        summary_scene = self.latest_vision_description or self.latest_scene.get("description", "鏆傛棤鍦烘櫙鎶ュ憡")
         summary_plan = str(self.robot_executor.last_plan.get("action", "STOP"))
         telemetry_summary = {
             "connection": "CONNECTED" if camera_online else "DISCONNECTED",
@@ -1556,6 +1830,9 @@ class PersonFollowerNode(Node):
                     "follow_lock_message": self.lock_message,
                     "current_command": self.current_command,
                     "current_control_source": self.current_control_source,
+                    "follow_state": self.lock_state,
+                    "frame_width": frame_width,
+                    "frame_height": frame_height,
                     "recording": self.recording,
                 },
             },
@@ -1608,6 +1885,10 @@ class PersonFollowerNode(Node):
                     "locked_target_id": self.locked_target_id,
                     "locked_bbox": [round(v, 1) for v in self.locked_target.bbox] if self.locked_target else None,
                     "target_confidence": round(self.locked_target.confidence, 3) if self.locked_target else None,
+                    "follow_state": self.lock_state,
+                    "follow_debug": dict(self.follow_debug),
+                    "frame_width": frame_width,
+                    "frame_height": frame_height,
                     "target_lost_seconds": round(time.time() - self.last_target_time, 2) if self.last_target_time else None,
                     "follow_enabled": self.follow_requested,
                     "follow_active": self.gesture_controller.mode == ControlMode.FOLLOW and self.follow_requested,
@@ -1617,6 +1898,9 @@ class PersonFollowerNode(Node):
             "media": media_payload,
         }
         return {
+            "follow_state": self.lock_state,
+            "frame_width": frame_width,
+            "frame_height": frame_height,
             "connected": camera_online,
             "dashboard_version": DASHBOARD_VERSION,
             "battery": self.battery_percent,
@@ -1710,7 +1994,7 @@ class PersonFollowerNode(Node):
         }
 
     def destroy_node(self) -> bool:
-        """确保 Ctrl+C 或节点退出时一定回零速。"""
+        """Documentation."""
         self.publish_stop("destroy node")
         if self.video_writer is not None:
             self.video_writer.release()

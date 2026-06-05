@@ -288,6 +288,43 @@ function commandVectorText(cmd = {}) {
   return `x=${x} y=${y} z=${z}`;
 }
 
+function mapClickToImageCoordinates(clickX, clickY, imgRect, rawWidth, rawHeight) {
+  if (!imgRect || !rawWidth || !rawHeight) return null;
+
+  const displayWidth = imgRect.width;
+  const displayHeight = imgRect.height;
+  if (displayWidth <= 0 || displayHeight <= 0) return null;
+
+  const rawAspect = rawWidth / rawHeight;
+  const displayAspect = displayWidth / displayHeight;
+
+  let videoWidth = displayWidth;
+  let videoHeight = displayHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (rawAspect > displayAspect) {
+    videoHeight = displayWidth / rawAspect;
+    offsetY = (displayHeight - videoHeight) / 2;
+  } else {
+    videoWidth = displayHeight * rawAspect;
+    offsetX = (displayWidth - videoWidth) / 2;
+  }
+
+  const relativeX = clickX - imgRect.left;
+  const relativeY = clickY - imgRect.top;
+  if (relativeX < offsetX || relativeY < offsetY || relativeX > offsetX + videoWidth || relativeY > offsetY + videoHeight) {
+    return null;
+  }
+
+  const imageX = ((relativeX - offsetX) / videoWidth) * rawWidth;
+  const imageY = ((relativeY - offsetY) / videoHeight) * rawHeight;
+  return {
+    x: Math.max(0, Math.min(rawWidth - 1, Math.round(imageX))),
+    y: Math.max(0, Math.min(rawHeight - 1, Math.round(imageY))),
+  };
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   return response.json();
@@ -787,9 +824,19 @@ function bindCommands() {
 
   document.getElementById("videoFeed")?.addEventListener("click", (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-    sendControl("LOCK_TARGET", { x, y });
+    const rawWidth = Number(event.currentTarget.naturalWidth || state.lastStatus.frame_width || 0);
+    const rawHeight = Number(event.currentTarget.naturalHeight || state.lastStatus.frame_height || 0);
+    const mapped = mapClickToImageCoordinates(event.clientX, event.clientY, rect, rawWidth, rawHeight);
+    if (!mapped) {
+      showHint(t("clickToLock"));
+      return;
+    }
+    sendControl("LOCK_TARGET", {
+      x: mapped.x,
+      y: mapped.y,
+      raw_width: rawWidth,
+      raw_height: rawHeight,
+    });
   });
 }
 
