@@ -40,16 +40,16 @@ person_follower:
     enable_backward: true
     enable_auto_move: true
 
-    # Gimbal auto-tracking parameters (aggressive tracking)
+    # Gimbal auto-tracking parameters (slower and more stable tracking)
     gimbal_target_y_ratio: 0.38    # Track upper torso to keep the head in frame
     gimbal_frame_center_y_ratio: 0.42  # Keep target slightly above frame center
     gimbal_yaw_gain: 3.2           # Higher gain for faster yaw response
-    gimbal_pitch_gain: 3.0         # Higher gain for faster pitch response
+    gimbal_pitch_gain: 1.0         # Lower pitch gain to reduce vertical hunting
     max_gimbal_yaw_speed: 3.0      # Maximum yaw speed (rad/s)
-    max_gimbal_pitch_speed: 2.4    # Maximum pitch speed (rad/s)
+    max_gimbal_pitch_speed: 1.0    # Maximum pitch speed (rad/s)
     min_gimbal_speed: 0.05         # Minimum gimbal speed to overcome friction
     gimbal_deadzone_px: 8          # Small deadzone for responsive tracking
-    gimbal_vertical_deadzone_px: 6 # Separate vertical deadzone for faster pitch tracking
+    gimbal_vertical_deadzone_px: 18 # Larger vertical deadzone to reduce oscillation
 
     # Locked-target follow control tuning.
     follow_control:
@@ -61,8 +61,8 @@ person_follower:
       max_area_change_ratio: 2.5
       target_lost_timeout: 1.0
       center_dead_zone_ratio: 0.08
-      too_far_height_ratio: 0.32
-      too_close_height_ratio: 0.58
+      too_far_height_ratio: 0.28
+      too_close_height_ratio: 0.66
       max_linear_x: 0.10
       max_angular_z: 0.30
       max_gimbal_yaw_speed: 0.25
@@ -70,7 +70,7 @@ person_follower:
       kp_gimbal_yaw: 0.20
       chassis_yaw_invert: false
       gimbal_yaw_invert: false
-      smooth_alpha: 0.4
+      smooth_alpha: 0.3
       control_rate_hz: 10.0
       gimbal_first: true
       chassis_rotate_delay_seconds: 0.5

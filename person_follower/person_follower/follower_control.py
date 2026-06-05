@@ -127,7 +127,9 @@ class PersonFollowerController:
                 yaw_speed = self.config.min_gimbal_speed if yaw_speed > 0 else -self.config.min_gimbal_speed
             gimbal_cmd.angular.z = yaw_speed
 
-        if abs(metrics["error_y"]) >= float(self.config.gimbal_vertical_deadzone_px):
+        # 垂直方向更容易抖动，采用更大的有效死区，避免云台持续上下 hunting。
+        vertical_deadzone = max(float(self.config.gimbal_vertical_deadzone_px), frame_height * 0.08)
+        if abs(metrics["error_y"]) >= vertical_deadzone:
             pitch_speed = self.config.gimbal_pitch_gain * metrics["error_y_normalized"]
             pitch_speed = clamp(pitch_speed, -self.config.max_gimbal_pitch_speed, self.config.max_gimbal_pitch_speed)
             if 0 < abs(pitch_speed) < self.config.min_gimbal_speed:
