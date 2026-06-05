@@ -111,6 +111,12 @@ class PersonFollowerNode(Node):
         self.record_root = Path(self.get_parameter("record_root").value)
         self.snapshot_dir = self.record_root / "snapshots"
         self.video_dir = self.record_root / "videos"
+        self.debug_log_dir = self.record_root / "logs"
+        self.debug_log_dir.mkdir(parents=True, exist_ok=True)
+        self.debug_log_path = self.debug_log_dir / ("person_follower_%s.log" % time.strftime("%Y%m%d_%H%M%S"))
+        self.debug_log_lock = threading.Lock()
+        self.debug_log_file = self.debug_log_path.open("a", encoding="utf-8", buffering=1)
+        self.last_follow_debug_log_time = 0.0
 
         self.detector = YoloPersonDetector(
             model_path=str(self.get_parameter("yolo_model").value),
@@ -441,7 +447,39 @@ class PersonFollowerNode(Node):
             self.get_logger().warning("[%s] %s" % (source, message))
         else:
             self.get_logger().info("[%s] %s" % (source, message))
+        self._append_debug_log(
+            "event",
+            {
+                "source": source,
+                "message": message,
+                "level": level,
+                "event_type": event_type,
+                "event": event,
+            },
+        )
         return event
+
+    def _append_debug_log(self, category: str, payload: Dict[str, object]) -> None:
+        """把关键调试信息写入独立日志文件，方便直接回传排障。"""
+        if self.debug_log_file is None:
+            return
+        record = {
+            "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": round(time.time(), 3),
+            "category": category,
+            "mode": str(self.gesture_controller.mode),
+            "lock_state": self.lock_state,
+            "follow_requested": bool(self.follow_requested),
+            "current_command": self.current_command,
+            "current_control_source": self.current_control_source,
+        }
+        record.update(payload)
+        try:
+            line = json.dumps(record, ensure_ascii=False, default=str)
+            with self.debug_log_lock:
+                self.debug_log_file.write(line + "\n")
+        except Exception as exc:
+            self.get_logger().warning("debug log write failed: %s" % exc)
 
     def robot_command_callback(self, msg: String) -> None:
         """Documentation."""
@@ -756,6 +794,7 @@ class PersonFollowerNode(Node):
             "camera_status": "online" if camera_online else "offline",
             "recording": self.recording,
             "lock_state": self.lock_state,
+            "debug_log_path": str(self.debug_log_path.resolve()) if hasattr(self, "debug_log_path") else "",
         }
 
     def start_manual_override(self, command: str) -> None:
@@ -1094,6 +1133,14 @@ class PersonFollowerNode(Node):
             self.lock_state = "LOCKED"
             self.lock_message = "Locked target stabilizing"
             self.follow_debug.update({"follow_state": self.lock_state})
+            self._append_debug_log(
+                "follow_wait",
+                {
+                    "reason": "waiting stable target",
+                    "locked_target_id": self.locked_target_id,
+                    "locked_bbox": [round(v, 1) for v in self.locked_target.bbox] if self.locked_target else None,
+                },
+            )
             self.publish_stop("waiting stable target")
             return
 
@@ -1140,6 +1187,28 @@ class PersonFollowerNode(Node):
                 "chassis_yaw_invert": bool(self.controller.config.chassis_yaw_invert),
             }
         )
+        if now - self.last_follow_debug_log_time >= 1.0:
+            self.last_follow_debug_log_time = now
+            self._append_debug_log(
+                "follow_active",
+                {
+                    "follow_state": "FOLLOW_ACTIVE",
+                    "locked_target_id": self.locked_target_id,
+                    "locked_bbox": [round(v, 1) for v in self.locked_target.bbox] if self.locked_target else None,
+                    "matched_bbox": [round(v, 1) for v in self.locked_target.bbox] if self.locked_target else None,
+                    "iou": round(float(self.follow_debug.get("iou", 0.0)), 3),
+                    "center_distance": round(float(self.follow_debug.get("center_distance", 0.0)), 2),
+                    "error_x": round(float(metrics["error_x"]), 2),
+                    "error_x_normalized": round(float(metrics["error_x_normalized"]), 3),
+                    "target_height_ratio": round(float(cmd_metrics["target_height_ratio"]), 3),
+                    "linear_x": round(float(safe_cmd.linear.x), 3),
+                    "angular_z": round(float(safe_cmd.angular.z), 3),
+                    "gimbal_yaw_speed": round(float(safe_gimbal_cmd.angular.z), 3),
+                    "gimbal_pitch_speed": round(float(safe_gimbal_cmd.angular.y), 3),
+                    "gimbal_yaw_invert": bool(self.controller.config.gimbal_yaw_invert),
+                    "chassis_yaw_invert": bool(self.controller.config.chassis_yaw_invert),
+                },
+            )
         self.lock_state = "FOLLOW_ACTIVE"
         self.lock_message = "Locked target tracked"
         reason = "follow: height=%s yaw=%s gimbal=%s" % (
@@ -1313,6 +1382,7 @@ class PersonFollowerNode(Node):
         self.follow_error_started_at = 0.0
         self.last_follow_cmd = Twist()
         self.last_follow_gimbal_cmd = Twist()
+        self.last_follow_debug_log_time = 0.0
         self.follow_debug.update(
             {
                 "follow_state": self.lock_state,
@@ -1330,6 +1400,18 @@ class PersonFollowerNode(Node):
                 "error_y_normalized": 0.0,
                 "gimbal_yaw_speed": 0.0,
             }
+        )
+        self._append_debug_log(
+            "locked_target",
+            {
+                "selected_by": selected_by,
+                "locked_target_id": self.locked_target_id,
+                "bbox": [round(v, 1) for v in self.locked_target.bbox],
+                "center_x": round(self.locked_target.center_x, 1),
+                "center_y": round(self.locked_target.center_y, 1),
+                "area": round(self.locked_target.area, 1),
+                "confidence": round(self.locked_target.confidence, 3),
+            },
         )
 
     def _resolve_locked_target(self, people: List[PersonDetection]) -> Optional[PersonDetection]:
@@ -1447,6 +1529,13 @@ class PersonFollowerNode(Node):
         self.lock_state = "LOST"
         self.lock_message = reason
         self.follow_debug.update({"follow_state": self.lock_state})
+        self._append_debug_log(
+            "follow_lost",
+            {
+                "reason": reason,
+                "locked_target_id": self.locked_target_id,
+            },
+        )
 
     def _iou(self, a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> float:
         """Documentation."""
@@ -2001,6 +2090,15 @@ class PersonFollowerNode(Node):
             self.video_writer = None
         if self.gesture_detector is not None:
             self.gesture_detector.close()
+        if getattr(self, "debug_log_file", None) is not None:
+            try:
+                with self.debug_log_lock:
+                    self.debug_log_file.flush()
+                    self.debug_log_file.close()
+            except Exception:
+                pass
+            finally:
+                self.debug_log_file = None
         return super().destroy_node()
 
 
